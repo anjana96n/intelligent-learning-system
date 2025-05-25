@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import CreatePoll from '../components/teacher/CreatePoll';
 import CreateQuiz from '../components/teacher/CreateQuiz';
+import axios from 'axios';
 
 interface Student {
   id: string;
@@ -20,18 +21,67 @@ const TeacherDashboard: React.FC = () => {
   const [showCreateQuiz, setShowCreateQuiz] = useState(false);
   const [socket, setSocket] = useState<any>(null);
 
+  // Fetch students on component mount
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5000/api/users/students', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        console.log('Fetched students:', response.data); // Debug log
+        // Initialize all students as absent
+        const initialStudents = response.data.map((student: any) => ({
+          id: student._id, // Use _id from database
+          name: student.name,
+          isPresent: false,
+          lastActive: new Date()
+        }));
+        console.log('Initialized students:', initialStudents); // Debug log
+        setStudents(initialStudents);
+      } catch (error) {
+        console.error('Error fetching students:', error);
+      }
+    };
+
+    fetchStudents();
+  }, []);
+
   useEffect(() => {
     const newSocket = io('http://localhost:5000');
     setSocket(newSocket);
 
-    newSocket.on('presence-update', (data: { studentId: string; isPresent: boolean }) => {
-      setStudents(prev => prev.map(student => 
-        student.id === data.studentId 
-          ? { ...student, isPresent: data.isPresent, lastActive: new Date() }
-          : student
-      ));
+    newSocket.on('presence-update', (data: { 
+      studentId: string; 
+      studentName: string;
+      isPresent: boolean;
+      lastActive: Date;
+    }) => {
+      console.log('Received presence update:', data); // Debug log
+      setStudents(prev => {
+        console.log('Current students:', prev); // Debug log
+        // Find the student to update using studentId
+        const studentIndex = prev.findIndex(s => s.id === data.studentId);
+        if (studentIndex === -1) {
+          console.log('Student not found in list:', data.studentName, 'with ID:', data.studentId); // Debug log
+          return prev;
+        }
+
+        // Create new array with updated student
+        const updatedStudents = [...prev];
+        updatedStudents[studentIndex] = {
+          ...updatedStudents[studentIndex],
+          isPresent: data.isPresent,
+          lastActive: new Date(data.lastActive)
+        };
+        console.log('Updated student status:', data.studentName, data.isPresent, 'at', new Date(data.lastActive).toLocaleTimeString()); // Debug log
+        return updatedStudents;
+      });
     });
 
+    // Cleanup on unmount
     return () => {
       newSocket.close();
     };
@@ -88,29 +138,48 @@ const TeacherDashboard: React.FC = () => {
         {/* Student Presence */}
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4">Student Presence</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {students.map(student => (
-              <div
-                key={student.id}
-                className={`p-4 rounded-lg border ${
-                  student.isPresent ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">{student.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      Last active: {new Date(student.lastActive).toLocaleTimeString()}
-                    </p>
-                  </div>
-                  <div
-                    className={`w-3 h-3 rounded-full ${
-                      student.isPresent ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                  />
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Student Name
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Last Active
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {students.map(student => (
+                  <tr key={student.id} className={student.isPresent ? 'bg-green-50' : 'bg-red-50'}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div
+                          className={`w-3 h-3 rounded-full mr-2 ${
+                            student.isPresent ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                        />
+                        <span className={`text-sm ${
+                          student.isPresent ? 'text-green-700' : 'text-red-700'
+                        }`}>
+                          {student.isPresent ? 'Present' : 'Absent'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(student.lastActive).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

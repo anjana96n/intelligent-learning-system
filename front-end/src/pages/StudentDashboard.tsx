@@ -32,6 +32,7 @@ const StudentDashboard: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const presenceTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const newSocket = io('http://localhost:5000');
@@ -67,8 +68,14 @@ const StudentDashboard: React.FC = () => {
 
   useEffect(() => {
     const loadModels = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+      try {
+        console.log('Loading face detection models...');
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+        await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+        console.log('Face detection models loaded successfully');
+      } catch (error) {
+        console.error('Error loading face detection models:', error);
+      }
     };
 
     const startVideo = async () => {
@@ -76,6 +83,10 @@ const StudentDashboard: React.FC = () => {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          // Wait for video to be ready
+          videoRef.current.onloadedmetadata = () => {
+            console.log('Video stream ready');
+          };
         }
       } catch (error) {
         console.error('Error accessing webcam:', error);
@@ -89,26 +100,69 @@ const StudentDashboard: React.FC = () => {
   useEffect(() => {
     const detectFace = async () => {
       if (videoRef.current && canvasRef.current) {
-        const detections = await faceapi.detectAllFaces(
-          videoRef.current,
-          new faceapi.TinyFaceDetectorOptions()
-        );
+        try {
+          const detections = await faceapi.detectAllFaces(
+            videoRef.current,
+            new faceapi.TinyFaceDetectorOptions()
+          );
 
-        const isFaceDetected = detections.length > 0;
-        setIsPresent(isFaceDetected);
-
-        if (socket) {
-          socket.emit('student-presence', {
-            studentId: user?.id,
-            isPresent: isFaceDetected
-          });
+          const isFaceDetected = detections.length > 0;
+          console.log('Face detected:', isFaceDetected, 'Current status:', isPresent); // Debug log
+          
+          if (isFaceDetected) {
+            // Clear any existing timeout
+            if (presenceTimeoutRef.current) {
+              clearTimeout(presenceTimeoutRef.current);
+              presenceTimeoutRef.current = null;
+            }
+            
+            // Always emit presence update when face is detected
+            if (socket && user) {
+              console.log('Emitting presence update - Present for user:', user); // Debug log
+              socket.emit('student-presence', {
+                studentId: user._id,
+                studentName: user.name,
+                isPresent: true,
+                lastActive: new Date()
+              });
+              setIsPresent(true);
+            }
+          } else {
+            // If no face is detected and we're currently marked as present
+            if (isPresent && !presenceTimeoutRef.current) {
+              console.log('Starting absence timeout'); // Debug log
+              // Set timeout to mark as absent after 10 seconds
+              presenceTimeoutRef.current = setTimeout(() => {
+                if (socket && user) {
+                  console.log('Emitting presence update - Absent for user:', user); // Debug log
+                  socket.emit('student-presence', {
+                    studentId: user._id,
+                    studentName: user.name,
+                    isPresent: false,
+                    lastActive: new Date()
+                  });
+                  setIsPresent(false);
+                }
+                presenceTimeoutRef.current = null;
+              }, 10000);
+            }
+          }
+        } catch (error) {
+          console.error('Error detecting face:', error);
         }
       }
     };
 
+    // Check for face every second
     const interval = setInterval(detectFace, 1000);
-    return () => clearInterval(interval);
-  }, [socket, user]);
+    return () => {
+      clearInterval(interval);
+      if (presenceTimeoutRef.current) {
+        clearTimeout(presenceTimeoutRef.current);
+        presenceTimeoutRef.current = null;
+      }
+    };
+  }, [socket, user, isPresent]);
 
   const handlePollResponse = (pollId: string, response: string) => {
     socket.emit('poll-response', {

@@ -81,13 +81,25 @@ const TeacherDashboard: React.FC = () => {
       });
     });
 
+    // Handle student disconnection
+    newSocket.on('disconnect', () => {
+      console.log('Socket disconnected'); // Debug log
+    });
+
     // Cleanup on unmount
     return () => {
-      newSocket.close();
+      if (newSocket) {
+        newSocket.close();
+      }
     };
   }, []);
 
   const handleLogout = () => {
+    // Close socket connection
+    if (socket) {
+      socket.close();
+    }
+    // Logout and navigate
     logout();
     navigate('/login');
   };

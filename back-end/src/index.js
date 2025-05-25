@@ -6,6 +6,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import quizRoutes from './routes/quiz.js';
+import userRoutes from './routes/users.js';
 import { authenticateToken } from './middleware/auth.js';
 import Quiz from './models/Quiz.js';
 import Poll from './models/Poll.js';
@@ -34,6 +35,7 @@ mongoose.connect(MONGODB_URI)
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/quiz', authenticateToken, quizRoutes);
+app.use('/api/users', authenticateToken, userRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -41,10 +43,15 @@ io.on('connection', (socket) => {
 
   // Handle student presence
   socket.on('student-presence', (data) => {
+    console.log('Received student presence:', data); // Debug log
+    // Broadcast to all clients including sender
     io.emit('presence-update', {
       studentId: data.studentId,
-      isPresent: data.isPresent
+      studentName: data.studentName,
+      isPresent: data.isPresent,
+      lastActive: data.lastActive
     });
+    console.log('Broadcasted presence update'); // Debug log
   });
 
   // Handle poll creation

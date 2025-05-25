@@ -181,6 +181,29 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
+    // Emit final presence update before logging out
+    if (socket && user) {
+      console.log('Emitting final presence update - Absent on logout'); // Debug log
+      socket.emit('student-presence', {
+        studentId: user._id,
+        studentName: user.name,
+        isPresent: false,
+        lastActive: new Date()
+      });
+    }
+    
+    // Clear any existing timeouts
+    if (presenceTimeoutRef.current) {
+      clearTimeout(presenceTimeoutRef.current);
+      presenceTimeoutRef.current = null;
+    }
+    
+    // Close socket connection
+    if (socket) {
+      socket.close();
+    }
+    
+    // Logout and navigate
     logout();
     navigate('/login');
   };

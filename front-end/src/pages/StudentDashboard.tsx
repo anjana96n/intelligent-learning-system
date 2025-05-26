@@ -52,6 +52,7 @@ const StudentDashboard: React.FC = () => {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const presenceTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     const newSocket = io('http://localhost:5000');
@@ -247,16 +248,39 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-  const handleQuizSubmit = (quizId: string, answers: number[]) => {
+  const handleQuizAnswer = (quizId: string, questionIndex: number, answerIndex: number) => {
+    setQuizAnswers(prev => {
+      const currentAnswers = prev[quizId] || [];
+      const newAnswers = [...currentAnswers];
+      newAnswers[questionIndex] = answerIndex;
+      return {
+        ...prev,
+        [quizId]: newAnswers
+      };
+    });
+  };
+
+  const handleQuizSubmit = (quizId: string) => {
     if (socket && user) {
-      socket.emit('quiz-submission', {
-        quizId,
-        studentId: user._id,
-        studentName: user.name,
-        answers
-      });
-      // Immediately remove the quiz from the student's view
-      setQuizzes(prev => prev.filter(q => q._id !== quizId));
+      const answers = quizAnswers[quizId] || [];
+      // Check if all questions have been answered
+      const quiz = quizzes.find(q => q._id === quizId);
+      if (quiz && answers.length === quiz.questions.length) {
+        socket.emit('quiz-submission', {
+          quizId,
+          studentId: user._id,
+          studentName: user.name,
+          answers
+        });
+        // Clear answers for this quiz
+        setQuizAnswers(prev => {
+          const newAnswers = { ...prev };
+          delete newAnswers[quizId];
+          return newAnswers;
+        });
+        // Remove the quiz from view
+        setQuizzes(prev => prev.filter(q => q._id !== quizId));
+      }
     }
   };
 
@@ -332,8 +356,12 @@ const StudentDashboard: React.FC = () => {
                           {question.options.map((option, oIndex) => (
                             <button
                               key={oIndex}
-                              onClick={() => handleQuizSubmit(quiz._id, [oIndex])}
-                              className="p-2 text-left bg-gray-100 hover:bg-gray-200 rounded-lg"
+                              onClick={() => handleQuizAnswer(quiz._id, qIndex, oIndex)}
+                              className={`p-2 text-left rounded-lg ${
+                                quizAnswers[quiz._id]?.[qIndex] === oIndex
+                                  ? 'bg-blue-100 border-2 border-blue-500'
+                                  : 'bg-gray-100 hover:bg-gray-200'
+                              }`}
                             >
                               {option}
                             </button>
@@ -341,6 +369,17 @@ const StudentDashboard: React.FC = () => {
                         </div>
                       </div>
                     ))}
+                    <button
+                      onClick={() => handleQuizSubmit(quiz._id)}
+                      disabled={!quizAnswers[quiz._id] || quizAnswers[quiz._id].length !== quiz.questions.length}
+                      className={`mt-4 px-4 py-2 rounded-lg ${
+                        quizAnswers[quiz._id]?.length === quiz.questions.length
+                          ? 'bg-green-500 text-white hover:bg-green-600'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      Submit Quiz
+                    </button>
                   </div>
                 </div>
               ))}

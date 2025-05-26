@@ -12,9 +12,6 @@ export default function Header() {
           </div>
           <nav className="flex space-x-4">
             <a href="/dashboard" className="text-gray-600 hover:text-[#4AA7EF]">Dashboard</a>
-            <a href="/notes" className="text-gray-600 hover:text-[#4AA7EF]">Notes</a>
-            <a href="/quizzes" className="text-gray-600 hover:text-[#4AA7EF]">Quizzes</a>
-            <a href="/polls" className="text-gray-600 hover:text-[#4AA7EF]">Polls</a>
           </nav>
         </div>
       </div>

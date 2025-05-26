@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import * as faceapi from 'face-api.js';
+import MainLayout from '../layouts/MainLayout';
 
 interface Poll {
   _id: string;
@@ -209,116 +210,95 @@ const StudentDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold">Student Dashboard</h1>
+    <MainLayout>
+      <div className="px-4 py-6 sm:px-0">
+        <div className="bg-white shadow rounded-lg p-6 mb-8">
+          <h2 className="text-lg font-semibold mb-4">Presence Detection</h2>
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                className="w-64 h-48 object-cover rounded"
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute top-0 left-0"
+              />
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user?.name}</span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-              >
-                Logout
-              </button>
+            <div>
+              <p className="text-lg">
+                Status: <span className={isPresent ? 'text-green-500' : 'text-red-500'}>
+                  {isPresent ? 'Present' : 'Absent'}
+                </span>
+              </p>
             </div>
           </div>
         </div>
-      </nav>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow rounded-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold mb-4">Presence Detection</h2>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  className="w-64 h-48 object-cover rounded"
-                />
-                <canvas
-                  ref={canvasRef}
-                  className="absolute top-0 left-0"
-                />
-              </div>
-              <div>
-                <p className="text-lg">
-                  Status: <span className={isPresent ? 'text-green-500' : 'text-red-500'}>
-                    {isPresent ? 'Present' : 'Absent'}
-                  </span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white shadow rounded-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold mb-4">Active Quizzes</h2>
-            <div className="space-y-6">
-              {quizzes.map(quiz => (
-                <div key={quiz._id} className="border rounded-lg p-4">
-                  <h3 className="font-medium mb-4">{quiz.title}</h3>
-                  <div className="space-y-4">
-                    {quiz.questions.map((question, qIndex) => (
-                      <div key={qIndex} className="space-y-2">
-                        <p className="font-medium">{question.question}</p>
-                        <div className="grid grid-cols-1 gap-2">
-                          {question.options.map((option, oIndex) => (
-                            <button
-                              key={oIndex}
-                              onClick={() => handleQuizSubmit(quiz._id, [oIndex])}
-                              className="p-2 text-left bg-gray-100 hover:bg-gray-200 rounded-lg"
-                            >
-                              {option}
-                            </button>
-                          ))}
-                        </div>
+        <div className="bg-white shadow rounded-lg p-6 mb-8">
+          <h2 className="text-lg font-semibold mb-4">Active Quizzes</h2>
+          <div className="space-y-6">
+            {quizzes.map(quiz => (
+              <div key={quiz._id} className="border rounded-lg p-4">
+                <h3 className="font-medium mb-4">{quiz.title}</h3>
+                <div className="space-y-4">
+                  {quiz.questions.map((question, qIndex) => (
+                    <div key={qIndex} className="space-y-2">
+                      <p className="font-medium">{question.question}</p>
+                      <div className="grid grid-cols-1 gap-2">
+                        {question.options.map((option, oIndex) => (
+                          <button
+                            key={oIndex}
+                            onClick={() => handleQuizSubmit(quiz._id, [oIndex])}
+                            className="p-2 text-left bg-gray-100 hover:bg-gray-200 rounded-lg"
+                          >
+                            {option}
+                          </button>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white shadow rounded-lg p-6">
-            <h2 className="text-lg font-semibold mb-4">Active Polls</h2>
-            <div className="space-y-6">
-              {polls.map(poll => (
-                <div key={poll._id} className="border rounded-lg p-4">
-                  <h3 className="font-medium mb-4">{poll.question}</h3>
-                  <div className="grid grid-cols-5 gap-2">
-                    {poll.options.map((option, index) => {
-                      const hasResponded = poll.responses.some(
-                        r => r.studentId === user?.id && r.response === option
-                      );
-                      return (
-                        <button
-                          key={index}
-                          onClick={() => handlePollResponse(poll._id, option)}
-                          disabled={hasResponded}
-                          className={`p-2 rounded-lg text-2xl ${
-                            hasResponded
-                              ? 'bg-blue-100 border-2 border-blue-500'
-                              : 'bg-gray-100 hover:bg-gray-200'
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
-      </main>
-    </div>
+
+        <div className="bg-white shadow rounded-lg p-6">
+          <h2 className="text-lg font-semibold mb-4">Active Polls</h2>
+          <div className="space-y-6">
+            {polls.map(poll => (
+              <div key={poll._id} className="border rounded-lg p-4">
+                <h3 className="font-medium mb-4">{poll.question}</h3>
+                <div className="grid grid-cols-5 gap-2">
+                  {poll.options.map((option, index) => {
+                    const hasResponded = poll.responses.some(
+                      r => r.studentId === user?.id && r.response === option
+                    );
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => handlePollResponse(poll._id, option)}
+                        disabled={hasResponded}
+                        className={`p-2 rounded-lg text-2xl ${
+                          hasResponded
+                            ? 'bg-blue-100 border-2 border-blue-500'
+                            : 'bg-gray-100 hover:bg-gray-200'
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </MainLayout>
   );
 };
 

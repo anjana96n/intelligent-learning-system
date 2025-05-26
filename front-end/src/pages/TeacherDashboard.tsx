@@ -26,6 +26,24 @@ interface Poll {
   createdAt: string;
 }
 
+interface Quiz {
+  _id: string;
+  title: string;
+  questions: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+  }[];
+  responses: {
+    studentId: string;
+    studentName: string;
+    answers: number[];
+    score: number;
+  }[];
+  targetStudents: string[];
+  createdAt: string;
+}
+
 const TeacherDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -34,6 +52,14 @@ const TeacherDashboard: React.FC = () => {
   const [showCreateQuiz, setShowCreateQuiz] = useState(false);
   const [socket, setSocket] = useState<any>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+
+  // Helper function to calculate quiz score
+  const calculateScore = (answers: number[], questions: Quiz['questions']) => {
+    return questions.reduce((score, question, index) => {
+      return score + (question.correctAnswer === answers[index] ? 1 : 0);
+    }, 0);
+  };
 
   // Fetch students on component mount
   useEffect(() => {
@@ -64,8 +90,13 @@ const TeacherDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    console.log('Setting up socket connection...'); // Debug log
     const newSocket = io('http://localhost:5000');
     setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      console.log('Socket connected in TeacherDashboard'); // Debug log
+    });
 
     newSocket.on('presence-update', (data: { 
       studentId: string; 
@@ -93,11 +124,6 @@ const TeacherDashboard: React.FC = () => {
         console.log('Updated student status:', data.studentName, data.isPresent, 'at', new Date(data.lastActive).toLocaleTimeString()); // Debug log
         return updatedStudents;
       });
-    });
-
-    // Handle student disconnection
-    newSocket.on('disconnect', () => {
-      console.log('Socket disconnected'); // Debug log
     });
 
     // Listen for new polls
@@ -150,8 +176,64 @@ const TeacherDashboard: React.FC = () => {
       }));
     });
 
-    // Cleanup on unmount
+    // Listen for new quizzes
+    newSocket.on('quiz-created', (quiz: Quiz) => {
+      console.log('Received new quiz in TeacherDashboard:', quiz); // Debug log
+      setQuizzes(prev => {
+        console.log('Current quizzes:', prev); // Debug log
+        return [quiz, ...prev];
+      });
+    });
+
+    // Listen for quiz updates
+    newSocket.on('quiz-updated', (updatedQuiz: Quiz) => {
+      console.log('Received quiz update in TeacherDashboard:', updatedQuiz); // Debug log
+      setQuizzes(prev => prev.map(q => q._id === updatedQuiz._id ? updatedQuiz : q));
+    });
+
+    // Listen for quiz removal
+    newSocket.on('quiz-removed', (quizId: string) => {
+      console.log('Quiz removed in TeacherDashboard:', quizId); // Debug log
+      setQuizzes(prev => prev.filter(q => q._id !== quizId));
+    });
+
+    // Listen for quiz responses
+    newSocket.on('quiz-response', (data: { quizId: string; studentId: string; studentName: string; answers: number[] }) => {
+      console.log('Received quiz response in TeacherDashboard:', data); // Debug log
+      setQuizzes(prev => prev.map(quiz => {
+        if (quiz._id === data.quizId) {
+          const updatedResponses = [...quiz.responses];
+          const existingResponseIndex = updatedResponses.findIndex(
+            r => r.studentId === data.studentId
+          );
+          
+          if (existingResponseIndex !== -1) {
+            updatedResponses[existingResponseIndex] = {
+              studentId: data.studentId,
+              studentName: data.studentName,
+              answers: data.answers,
+              score: calculateScore(data.answers, quiz.questions)
+            };
+          } else {
+            updatedResponses.push({
+              studentId: data.studentId,
+              studentName: data.studentName,
+              answers: data.answers,
+              score: calculateScore(data.answers, quiz.questions)
+            });
+          }
+
+          return {
+            ...quiz,
+            responses: updatedResponses
+          };
+        }
+        return quiz;
+      }));
+    });
+
     return () => {
+      console.log('Cleaning up socket connection...'); // Debug log
       if (newSocket) {
         newSocket.close();
       }
@@ -256,6 +338,75 @@ const TeacherDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Quiz Responses Section */}
+        <div className="bg-white shadow rounded-lg p-6 mt-8">
+          <h2 className="text-lg font-semibold mb-4">Quiz Responses</h2>
+          <div className="space-y-6">
+            {quizzes.map(quiz => {
+              const responseCount = quiz.responses.length;
+              const totalStudents = quiz.targetStudents.length;
+              const allResponded = responseCount === totalStudents;
+              const averageScore = quiz.responses.length > 0
+                ? quiz.responses.reduce((sum, r) => sum + r.score, 0) / quiz.responses.length
+                : 0;
+
+              return (
+                <div key={quiz._id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-medium">{quiz.title}</h3>
+                    <div className="text-sm text-gray-500">
+                      Responses: {responseCount}/{totalStudents}
+                      {allResponded && (
+                        <span className="ml-2 text-green-500">(All responded)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {quiz.questions.map((question, qIndex) => (
+                      <div key={qIndex} className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">{question.question}</h4>
+                        <div className="space-y-2">
+                          {quiz.responses.map(response => (
+                            <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
+                              <div className="flex items-center space-x-4">
+                                <span className="text-gray-700">{response.studentName}</span>
+                                <span className="text-sm text-gray-500">
+                                  Selected: Option {response.answers[qIndex] + 1}
+                                </span>
+                                <span className={`text-sm ${
+                                  response.answers[qIndex] === question.correctAnswer
+                                    ? 'text-green-500'
+                                    : 'text-red-500'
+                                }`}>
+                                  {response.answers[qIndex] === question.correctAnswer
+                                    ? '✓ Correct'
+                                    : '✗ Incorrect'}
+                                </span>
+                              </div>
+                              <span className="text-sm text-gray-500">
+                                Score: {response.score}/{quiz.questions.length}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-sm text-gray-500">
+                          Correct Answer: Option {question.correctAnswer + 1}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="mt-4 text-sm text-gray-500">
+                      Average Score: {averageScore.toFixed(1)}/{quiz.questions.length}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {quizzes.length === 0 && (
+              <p className="text-gray-500 text-center">No active quizzes</p>
+            )}
           </div>
         </div>
 

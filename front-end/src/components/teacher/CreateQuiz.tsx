@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Question {
   question: string;
@@ -12,6 +13,7 @@ interface CreateQuizProps {
 }
 
 const CreateQuiz: React.FC<CreateQuizProps> = ({ onClose, socket }) => {
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<Question[]>([
     {
@@ -52,13 +54,24 @@ const CreateQuiz: React.FC<CreateQuizProps> = ({ onClose, socket }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || questions.some(q => !q.question || q.options.some(o => !o))) return;
+    console.log('Submitting quiz...');
+    console.log('User:', user);
+    console.log('Title:', title);
+    console.log('Questions:', questions);
 
-    socket.emit('create-quiz', {
+    if (!title || questions.some(q => !q.question || q.options.some(o => !o)) || !user?._id) {
+      console.error('Validation failed:', { title, questions, userId: user?._id });
+      return;
+    }
+
+    const quizData = {
       title,
-      questions
-    });
+      questions,
+      createdBy: user._id
+    };
+    console.log('Emitting create-quiz event with data:', quizData);
 
+    socket.emit('create-quiz', quizData);
     onClose();
   };
 

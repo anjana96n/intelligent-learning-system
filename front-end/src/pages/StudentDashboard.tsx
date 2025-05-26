@@ -21,7 +21,24 @@ interface Quiz {
     options: string[];
     correctAnswer: number;
   }[];
+  responses: {
+    studentId: string;
+    studentName: string;
+    answers: number[];
+    score: number;
+  }[];
+  targetStudents: string[];
   createdAt: string;
+}
+
+interface QuizFeedback {
+  quizId: string;
+  score: number;
+  totalQuestions: number;
+  correctAnswers: {
+    questionIndex: number;
+    correctAnswer: number;
+  }[];
 }
 
 const StudentDashboard: React.FC = () => {
@@ -31,6 +48,7 @@ const StudentDashboard: React.FC = () => {
   const [socket, setSocket] = useState<any>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizFeedback, setQuizFeedback] = useState<Record<string, QuizFeedback>>({});
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const presenceTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -54,6 +72,12 @@ const StudentDashboard: React.FC = () => {
       setPolls(activePolls);
     });
 
+    // Listen for active quizzes
+    newSocket.on('active-quizzes', (activeQuizzes: Quiz[]) => {
+      console.log('Received active quizzes:', activeQuizzes);
+      setQuizzes(activeQuizzes);
+    });
+
     // Listen for new polls
     newSocket.on('poll-created', (poll: Poll) => {
       console.log('Received new poll:', poll);
@@ -62,23 +86,47 @@ const StudentDashboard: React.FC = () => {
 
     // Listen for poll updates
     newSocket.on('poll-updated', (updatedPoll: Poll) => {
-      console.log('Received poll update:', updatedPoll); // Debug log
+      console.log('Received poll update:', updatedPoll);
       setPolls(prev => prev.map(p => p._id === updatedPoll._id ? updatedPoll : p));
     });
 
     // Listen for poll removal
     newSocket.on('poll-removed', (pollId: string) => {
-      console.log('Poll removed:', pollId); // Debug log
+      console.log('Poll removed:', pollId);
       setPolls(prev => prev.filter(p => p._id !== pollId));
+    });
+
+    // Listen for quiz feedback
+    newSocket.on('quiz-feedback', (feedback: QuizFeedback) => {
+      console.log('Received quiz feedback:', feedback);
+      setQuizFeedback(prev => ({
+        ...prev,
+        [feedback.quizId]: feedback
+      }));
     });
 
     // Listen for new quizzes
     newSocket.on('quiz-created', (quiz: Quiz) => {
+      console.log('Received new quiz:', quiz);
       setQuizzes(prev => [quiz, ...prev]);
-      // Remove quiz after 3 minutes
-      setTimeout(() => {
-        setQuizzes(prev => prev.filter(q => q._id !== quiz._id));
-      }, 3 * 60 * 1000);
+    });
+
+    // Listen for quiz updates
+    newSocket.on('quiz-updated', (updatedQuiz: Quiz) => {
+      console.log('Received quiz update:', updatedQuiz);
+      setQuizzes(prev => prev.map(q => q._id === updatedQuiz._id ? updatedQuiz : q));
+    });
+
+    // Listen for quiz removal
+    newSocket.on('quiz-removed', (quizId: string) => {
+      console.log('Quiz removed:', quizId);
+      setQuizzes(prev => prev.filter(q => q._id !== quizId));
+      // Clear feedback for removed quiz
+      setQuizFeedback(prev => {
+        const newFeedback = { ...prev };
+        delete newFeedback[quizId];
+        return newFeedback;
+      });
     });
 
     return () => {
@@ -200,11 +248,16 @@ const StudentDashboard: React.FC = () => {
   };
 
   const handleQuizSubmit = (quizId: string, answers: number[]) => {
-    socket.emit('quiz-submission', {
-      quizId,
-      studentId: user?.id,
-      answers
-    });
+    if (socket && user) {
+      socket.emit('quiz-submission', {
+        quizId,
+        studentId: user._id,
+        studentName: user.name,
+        answers
+      });
+      // Immediately remove the quiz from the student's view
+      setQuizzes(prev => prev.filter(q => q._id !== quizId));
+    }
   };
 
   const handleLogout = () => {
@@ -266,31 +319,65 @@ const StudentDashboard: React.FC = () => {
         <div className="bg-white shadow rounded-lg p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Active Quizzes</h2>
           <div className="space-y-6">
-            {quizzes.map(quiz => (
-              <div key={quiz._id} className="border rounded-lg p-4">
-                <h3 className="font-medium mb-4">{quiz.title}</h3>
-                <div className="space-y-4">
-                  {quiz.questions.map((question, qIndex) => (
-                    <div key={qIndex} className="space-y-2">
-                      <p className="font-medium">{question.question}</p>
-                      <div className="grid grid-cols-1 gap-2">
-                        {question.options.map((option, oIndex) => (
-                          <button
-                            key={oIndex}
-                            onClick={() => handleQuizSubmit(quiz._id, [oIndex])}
-                            className="p-2 text-left bg-gray-100 hover:bg-gray-200 rounded-lg"
-                          >
-                            {option}
-                          </button>
-                        ))}
+            {quizzes
+              .filter(quiz => !quiz.responses.some(r => r.studentId === user?._id))
+              .map(quiz => (
+                <div key={quiz._id} className="border rounded-lg p-4">
+                  <h3 className="font-medium mb-4">{quiz.title}</h3>
+                  <div className="space-y-4">
+                    {quiz.questions.map((question, qIndex) => (
+                      <div key={qIndex} className="space-y-2">
+                        <p className="font-medium">{question.question}</p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {question.options.map((option, oIndex) => (
+                            <button
+                              key={oIndex}
+                              onClick={() => handleQuizSubmit(quiz._id, [oIndex])}
+                              className="p-2 text-left bg-gray-100 hover:bg-gray-200 rounded-lg"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            {quizzes.filter(quiz => !quiz.responses.some(r => r.studentId === user?._id)).length === 0 && (
+              <p className="text-gray-500 text-center">No active quizzes</p>
+            )}
           </div>
         </div>
+
+        {/* Quiz Feedback Section */}
+        {Object.entries(quizFeedback).length > 0 && (
+          <div className="bg-white shadow rounded-lg p-6 mb-8">
+            <h2 className="text-lg font-semibold mb-4">Quiz Results</h2>
+            <div className="space-y-6">
+              {Object.entries(quizFeedback).map(([quizId, feedback]) => (
+                <div key={quizId} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-medium">Quiz Results</h3>
+                    <div className="text-sm text-gray-500">
+                      Score: {feedback.score}/{feedback.totalQuestions}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {feedback.correctAnswers.map((answer, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <span className="text-gray-600">Question {index + 1}:</span>
+                        <span className="text-green-600">
+                          Correct Answer: Option {answer.correctAnswer + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white shadow rounded-lg p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Active Polls</h2>

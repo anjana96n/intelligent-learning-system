@@ -10,6 +10,7 @@ import userRoutes from './routes/users.js';
 import { authenticateToken } from './middleware/auth.js';
 import Quiz from './models/Quiz.js';
 import Poll from './models/Poll.js';
+import User from './models/User.js';
 
 dotenv.config();
 
@@ -41,6 +42,43 @@ app.use('/api/users', authenticateToken, userRoutes);
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
+  // Send active polls to newly connected students
+  socket.on('student-connected', async (data) => {
+    try {
+      if (data.role === 'student') {
+        // Store user info in socket for disconnect handling
+        socket.userId = data.userId;
+        socket.userName = data.userName;
+
+        // Get all active polls
+        const activePolls = await Poll.find({
+          targetStudents: data.userId
+        }).sort({ createdAt: -1 });
+
+        // Format polls for emission
+        const formattedPolls = activePolls.map(poll => ({
+          _id: poll._id,
+          question: poll.question,
+          options: poll.options,
+          responses: poll.responses.map(r => ({
+            studentId: r.studentId,
+            studentName: r.studentId.name,
+            response: r.response
+          })),
+          targetStudents: poll.targetStudents,
+          createdAt: poll.createdAt,
+          updatedAt: poll.updatedAt
+        }));
+
+        // Send active polls to the newly connected student
+        socket.emit('active-polls', formattedPolls);
+        console.log('Sent active polls to new student:', data.userId);
+      }
+    } catch (error) {
+      console.error('Error in student-connected handler:', error);
+    }
+  });
+
   // Handle student presence
   socket.on('student-presence', (data) => {
     console.log('Received student presence:', data); // Debug log
@@ -61,18 +99,39 @@ io.on('connection', (socket) => {
         throw new Error('User ID is required to create a poll');
       }
 
+      // Get all registered students
+      const students = await User.find({ role: 'student' });
+      const studentIds = students.map(student => student._id);
+
       const poll = new Poll({
         question: data.question,
         options: data.options,
-        createdBy: data.createdBy
+        createdBy: data.createdBy,
+        responses: [],
+        targetStudents: studentIds // Store the list of students who should see this poll
       });
       await poll.save();
-      io.emit('poll-created', poll);
+
+      // Format the poll data for emission
+      const formattedPoll = {
+        _id: poll._id,
+        question: poll.question,
+        options: poll.options,
+        responses: [],
+        targetStudents: studentIds,
+        createdAt: poll.createdAt,
+        updatedAt: poll.updatedAt
+      };
+
+      // Broadcast to all connected clients
+      io.emit('poll-created', formattedPoll);
+      console.log('Broadcasted new poll to all clients:', formattedPoll);
 
       // Remove poll after 3 minutes
       setTimeout(async () => {
         await Poll.findByIdAndDelete(poll._id);
         io.emit('poll-removed', poll._id);
+        console.log('Poll removed after timeout:', poll._id);
       }, 3 * 60 * 1000);
     } catch (error) {
       console.error('Error creating poll:', error);
@@ -85,12 +144,61 @@ io.on('connection', (socket) => {
     try {
       const poll = await Poll.findById(data.pollId);
       if (poll) {
-        poll.responses.push({
-          studentId: data.studentId,
-          response: data.response
-        });
+        // Find existing response for this student
+        const existingResponseIndex = poll.responses.findIndex(
+          r => r.studentId.toString() === data.studentId
+        );
+
+        if (existingResponseIndex !== -1) {
+          // Update existing response
+          poll.responses[existingResponseIndex].response = data.response;
+        } else {
+          // Add new response
+          poll.responses.push({
+            studentId: data.studentId,
+            response: data.response
+          });
+        }
+
         await poll.save();
-        io.emit('poll-updated', poll);
+
+        // Fetch the updated poll with populated student information
+        const updatedPoll = await Poll.findById(poll._id)
+          .populate('responses.studentId', 'name');
+
+        // Transform the response data to include student names
+        const transformedPoll = {
+          _id: updatedPoll._id,
+          question: updatedPoll.question,
+          options: updatedPoll.options,
+          responses: updatedPoll.responses.map(r => ({
+            studentId: r.studentId._id,
+            studentName: r.studentId.name,
+            response: r.response
+          })),
+          targetStudents: updatedPoll.targetStudents,
+          createdAt: updatedPoll.createdAt,
+          updatedAt: updatedPoll.updatedAt
+        };
+
+        // Check if all target students have responded
+        const allStudentsResponded = poll.targetStudents.every(studentId =>
+          poll.responses.some(response => response.studentId.toString() === studentId.toString())
+        );
+
+        // Broadcast to all clients
+        io.emit('poll-updated', transformedPoll);
+        console.log('Broadcasted poll update to all clients:', transformedPoll);
+
+        // If all students have responded, schedule poll removal after 10 seconds
+        if (allStudentsResponded) {
+          console.log('All students have responded to poll:', poll._id);
+          setTimeout(async () => {
+            await Poll.findByIdAndDelete(poll._id);
+            io.emit('poll-removed', poll._id);
+            console.log('Poll removed after all responses:', poll._id);
+          }, 10000); // 10 seconds
+        }
       }
     } catch (error) {
       console.error('Error submitting poll response:', error);
@@ -144,8 +252,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle disconnection
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
+    // If we have the user's ID stored in the socket, emit a presence update
+    if (socket.userId) {
+      io.emit('presence-update', {
+        studentId: socket.userId,
+        studentName: socket.userName,
+        isPresent: false,
+        lastActive: new Date()
+      });
+      console.log('Broadcasted absence update for disconnected user:', socket.userId);
+    }
   });
 });
 

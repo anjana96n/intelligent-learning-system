@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
@@ -39,18 +39,37 @@ const StudentDashboard: React.FC = () => {
     const newSocket = io('http://localhost:5000');
     setSocket(newSocket);
 
+    // Emit student-connected event when socket connects
+    newSocket.on('connect', () => {
+      console.log('Socket connected, emitting student-connected event');
+      newSocket.emit('student-connected', {
+        userId: user?._id,
+        role: 'student'
+      });
+    });
+
+    // Listen for active polls
+    newSocket.on('active-polls', (activePolls: Poll[]) => {
+      console.log('Received active polls:', activePolls);
+      setPolls(activePolls);
+    });
+
     // Listen for new polls
     newSocket.on('poll-created', (poll: Poll) => {
+      console.log('Received new poll:', poll);
       setPolls(prev => [poll, ...prev]);
-      // Remove poll after 3 minutes
-      setTimeout(() => {
-        setPolls(prev => prev.filter(p => p._id !== poll._id));
-      }, 3 * 60 * 1000);
     });
 
     // Listen for poll updates
     newSocket.on('poll-updated', (updatedPoll: Poll) => {
+      console.log('Received poll update:', updatedPoll); // Debug log
       setPolls(prev => prev.map(p => p._id === updatedPoll._id ? updatedPoll : p));
+    });
+
+    // Listen for poll removal
+    newSocket.on('poll-removed', (pollId: string) => {
+      console.log('Poll removed:', pollId); // Debug log
+      setPolls(prev => prev.filter(p => p._id !== pollId));
     });
 
     // Listen for new quizzes
@@ -63,9 +82,11 @@ const StudentDashboard: React.FC = () => {
     });
 
     return () => {
-      newSocket.close();
+      if (newSocket) {
+        newSocket.close();
+      }
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -166,11 +187,16 @@ const StudentDashboard: React.FC = () => {
   }, [socket, user, isPresent]);
 
   const handlePollResponse = (pollId: string, response: string) => {
-    socket.emit('poll-response', {
-      pollId,
-      studentId: user?.id,
-      response
-    });
+    if (socket && user) {
+      socket.emit('poll-response', {
+        pollId,
+        studentId: user._id,
+        studentName: user.name,
+        response
+      });
+      // Immediately remove the poll from the student's view
+      setPolls(prev => prev.filter(p => p._id !== pollId));
+    }
   };
 
   const handleQuizSubmit = (quizId: string, answers: number[]) => {
@@ -266,35 +292,30 @@ const StudentDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white shadow rounded-lg p-6">
+        <div className="bg-white shadow rounded-lg p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Active Polls</h2>
           <div className="space-y-6">
-            {polls.map(poll => (
-              <div key={poll._id} className="border rounded-lg p-4">
-                <h3 className="font-medium mb-4">{poll.question}</h3>
-                <div className="grid grid-cols-5 gap-2">
-                  {poll.options.map((option, index) => {
-                    const hasResponded = poll.responses.some(
-                      r => r.studentId === user?.id && r.response === option
-                    );
-                    return (
+            {polls
+              .filter(poll => !poll.responses.some(r => r.studentId === user?._id))
+              .map(poll => (
+                <div key={poll._id} className="border rounded-lg p-4">
+                  <h3 className="font-medium mb-4">{poll.question}</h3>
+                  <div className="grid grid-cols-5 gap-2">
+                    {poll.options.map((option, index) => (
                       <button
                         key={index}
                         onClick={() => handlePollResponse(poll._id, option)}
-                        disabled={hasResponded}
-                        className={`p-2 rounded-lg text-2xl ${
-                          hasResponded
-                            ? 'bg-blue-100 border-2 border-blue-500'
-                            : 'bg-gray-100 hover:bg-gray-200'
-                        }`}
+                        className="p-2 rounded-lg text-2xl bg-gray-100 hover:bg-gray-200"
                       >
                         {option}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            {polls.filter(poll => !poll.responses.some(r => r.studentId === user?._id)).length === 0 && (
+              <p className="text-gray-500 text-center">No active polls</p>
+            )}
           </div>
         </div>
       </div>

@@ -1,15 +1,20 @@
 import mongoose from 'mongoose';
 
-const questionSchema = new mongoose.Schema({
-  question: {
+const responseSchema = new mongoose.Schema({
+  studentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  studentName: {
     type: String,
     required: true
   },
-  options: [{
-    type: String,
+  answers: [{
+    type: Number,
     required: true
   }],
-  correctAnswer: {
+  score: {
     type: Number,
     required: true
   }
@@ -20,12 +25,31 @@ const quizSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  questions: [questionSchema],
+  questions: [{
+    question: {
+      type: String,
+      required: true
+    },
+    options: [{
+      type: String,
+      required: true
+    }],
+    correctAnswer: {
+      type: Number,
+      required: true
+    }
+  }],
+  responses: [responseSchema],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
-  }
+  },
+  targetStudents: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  }]
 }, {
   timestamps: true
 });

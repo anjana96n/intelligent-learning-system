@@ -13,6 +13,19 @@ interface Student {
   lastActive: Date;
 }
 
+interface Poll {
+  _id: string;
+  question: string;
+  options: string[];
+  responses: {
+    studentId: string;
+    studentName: string;
+    response: string;
+  }[];
+  targetStudents: string[];
+  createdAt: string;
+}
+
 const TeacherDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -20,6 +33,7 @@ const TeacherDashboard: React.FC = () => {
   const [showCreatePoll, setShowCreatePoll] = useState(false);
   const [showCreateQuiz, setShowCreateQuiz] = useState(false);
   const [socket, setSocket] = useState<any>(null);
+  const [polls, setPolls] = useState<Poll[]>([]);
 
   // Fetch students on component mount
   useEffect(() => {
@@ -84,6 +98,56 @@ const TeacherDashboard: React.FC = () => {
     // Handle student disconnection
     newSocket.on('disconnect', () => {
       console.log('Socket disconnected'); // Debug log
+    });
+
+    // Listen for new polls
+    newSocket.on('poll-created', (poll: Poll) => {
+      console.log('Received new poll:', poll);
+      setPolls(prev => [poll, ...prev]);
+    });
+
+    // Listen for poll updates
+    newSocket.on('poll-updated', (updatedPoll: Poll) => {
+      console.log('Received poll update:', updatedPoll);
+      setPolls(prev => prev.map(p => p._id === updatedPoll._id ? updatedPoll : p));
+    });
+
+    // Listen for poll removal
+    newSocket.on('poll-removed', (pollId: string) => {
+      console.log('Poll removed:', pollId);
+      setPolls(prev => prev.filter(p => p._id !== pollId));
+    });
+
+    // Listen for poll responses
+    newSocket.on('poll-response', (data: { pollId: string; studentId: string; studentName: string; response: string }) => {
+      setPolls(prev => prev.map(poll => {
+        if (poll._id === data.pollId) {
+          const updatedResponses = [...poll.responses];
+          const existingResponseIndex = updatedResponses.findIndex(
+            r => r.studentId === data.studentId
+          );
+          
+          if (existingResponseIndex !== -1) {
+            updatedResponses[existingResponseIndex] = {
+              studentId: data.studentId,
+              studentName: data.studentName,
+              response: data.response
+            };
+          } else {
+            updatedResponses.push({
+              studentId: data.studentId,
+              studentName: data.studentName,
+              response: data.response
+            });
+          }
+
+          return {
+            ...poll,
+            responses: updatedResponses
+          };
+        }
+        return poll;
+      }));
     });
 
     // Cleanup on unmount
@@ -192,6 +256,57 @@ const TeacherDashboard: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Poll Responses Section */}
+        <div className="bg-white shadow rounded-lg p-6 mt-8">
+          <h2 className="text-lg font-semibold mb-4">Poll Responses</h2>
+          <div className="space-y-6">
+            {polls.map(poll => {
+              const responseCount = poll.responses.length;
+              const totalStudents = poll.targetStudents.length;
+              const allResponded = responseCount === totalStudents;
+
+              return (
+                <div key={poll._id} className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-medium">{poll.question}</h3>
+                    <div className="text-sm text-gray-500">
+                      Responses: {responseCount}/{totalStudents}
+                      {allResponded && (
+                        <span className="ml-2 text-green-500">(All responded)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {poll.options.map((option, index) => (
+                      <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                        <h4 className="font-medium mb-2">{option}</h4>
+                        <div className="space-y-2">
+                          {poll.responses
+                            .filter(response => response.response === option)
+                            .map(response => (
+                              <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
+                                <span className="text-gray-700">{response.studentName}</span>
+                                <span className="text-sm text-gray-500">
+                                  {new Date(poll.createdAt).toLocaleTimeString()}
+                                </span>
+                              </div>
+                            ))}
+                          {poll.responses.filter(response => response.response === option).length === 0 && (
+                            <p className="text-gray-500 text-sm">No responses yet</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {polls.length === 0 && (
+              <p className="text-gray-500 text-center">No active polls</p>
+            )}
           </div>
         </div>
       </div>

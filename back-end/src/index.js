@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import natural from 'natural';
 import authRoutes from './routes/auth.js';
 import quizRoutes from './routes/quiz.js';
 import userRoutes from './routes/users.js';
@@ -25,16 +26,112 @@ const io = new Server(httpServer, {
   }
 });
 
-// Simple extractive summarizer: returns the first sentence or the longest sentence
-function extractiveSummary(text) {
-  if (!text) return '';
-  // Split into sentences (very basic)
+// Educational keywords that indicate important content
+const EDUCATIONAL_KEYWORDS = [
+  'important', 'key', 'main', 'primary', 'essential', 'crucial', 'significant',
+  'learn', 'understand', 'remember', 'note', 'focus', 'highlight',
+  'definition', 'concept', 'theory', 'principle', 'method', 'process',
+  'example', 'instance', 'case', 'demonstrate', 'show', 'explain',
+  'because', 'therefore', 'thus', 'consequently', 'as a result',
+  'first', 'second', 'third', 'finally', 'in conclusion', 'summary'
+];
+
+// Enhanced multi-factor summarizer
+function enhancedSummary(text) {
+  if (!text || text.length < 50) return text;
+  
+  // Split into sentences
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  // Option 1: First sentence
-  if (sentences.length > 0) return sentences[0].trim();
-  // Option 2: Longest sentence (uncomment if you prefer)
-  // return sentences.reduce((a, b) => (a.length > b.length ? a : b), '').trim();
-  return text.trim();
+  if (sentences.length <= 1) return text.trim();
+  
+  // Tokenize and calculate TF-IDF scores
+  const tokenizer = new natural.WordTokenizer();
+  const tfidf = new natural.TfIdf();
+  
+  // Add sentences to TF-IDF
+  sentences.forEach((sentence, index) => {
+    tfidf.addDocument(tokenizer.tokenize(sentence.toLowerCase()));
+  });
+  
+  // Calculate comprehensive sentence scores
+  const sentenceScores = sentences.map((sentence, index) => {
+    const tokens = tokenizer.tokenize(sentence.toLowerCase());
+    const sentenceLength = tokens.length;
+    
+    // Factor 1: TF-IDF score
+    let tfidfScore = 0;
+    tokens.forEach(token => {
+      tfidfScore += tfidf.tfidf(token, index);
+    });
+    tfidfScore = tfidfScore / sentenceLength;
+    
+    // Factor 2: Position score (first and last sentences get bonus)
+    const positionScore = index === 0 ? 0.3 : (index === sentences.length - 1 ? 0.2 : 0);
+    
+    // Factor 3: Length score (prefer medium-length sentences)
+    const lengthScore = sentenceLength >= 5 && sentenceLength <= 20 ? 0.2 : 
+                       sentenceLength < 5 ? 0.1 : 0.05;
+    
+    // Factor 4: Educational keyword score
+    let keywordScore = 0;
+    const sentenceLower = sentence.toLowerCase();
+    EDUCATIONAL_KEYWORDS.forEach(keyword => {
+      if (sentenceLower.includes(keyword)) {
+        keywordScore += 0.1;
+      }
+    });
+    keywordScore = Math.min(keywordScore, 0.3); // Cap at 0.3
+    
+    // Factor 5: Question score (questions are often important)
+    const questionScore = sentence.includes('?') ? 0.15 : 0;
+    
+    // Factor 6: Definition pattern score (sentences with "is" or "are" often define concepts)
+    const definitionPattern = /\b(is|are|means|refers to|defined as)\b/i;
+    const definitionScore = definitionPattern.test(sentence) ? 0.1 : 0;
+    
+    // Factor 7: Number/list score (sentences with numbers are often important)
+    const numberScore = /\d+/.test(sentence) ? 0.1 : 0;
+    
+    // Combine all factors
+    const totalScore = tfidfScore + positionScore + lengthScore + keywordScore + 
+                      questionScore + definitionScore + numberScore;
+    
+    return { 
+      sentence: sentence.trim(), 
+      score: totalScore,
+      factors: {
+        tfidf: tfidfScore,
+        position: positionScore,
+        length: lengthScore,
+        keywords: keywordScore,
+        question: questionScore,
+        definition: definitionScore,
+        number: numberScore
+      }
+    };
+  });
+  
+  // Return the sentence with highest score
+  const bestSentence = sentenceScores.reduce((a, b) => 
+    a.score > b.score ? a : b
+  );
+  
+  // If the best sentence is too short, try to get a better one
+  if (bestSentence.sentence.length < 30 && sentences.length > 2) {
+    // Find the longest sentence with decent score
+    const longSentences = sentenceScores.filter(s => s.sentence.length >= 30);
+    if (longSentences.length > 0) {
+      const bestLongSentence = longSentences.reduce((a, b) => 
+        a.score > b.score ? a : b
+      );
+      // Only use longer sentence if its score is close to the best score
+      if (bestLongSentence.score >= bestSentence.score * 0.8) {
+        return bestLongSentence.sentence;
+      }
+    }
+  }
+  
+  return bestSentence.sentence;
 }
 
 // Middleware
@@ -218,65 +315,39 @@ io.on('connection', (socket) => {
 
         await poll.save();
 
-        // Fetch the updated poll with populated student information
-        const updatedPoll = await Poll.findById(poll._id)
-          .populate('responses.studentId', 'name');
-
-        // Transform the response data to include student names
-        const transformedPoll = {
-          _id: updatedPoll._id,
-          question: updatedPoll.question,
-          options: updatedPoll.options,
-          responses: updatedPoll.responses.map(r => ({
-            studentId: r.studentId._id,
+        // Broadcast updated poll to all clients
+        const formattedPoll = {
+          _id: poll._id,
+          question: poll.question,
+          options: poll.options,
+          responses: poll.responses.map(r => ({
+            studentId: r.studentId,
             studentName: r.studentId.name,
             response: r.response
           })),
-          targetStudents: updatedPoll.targetStudents,
-          createdAt: updatedPoll.createdAt,
-          updatedAt: updatedPoll.updatedAt
+          targetStudents: poll.targetStudents,
+          createdAt: poll.createdAt,
+          updatedAt: poll.updatedAt
         };
 
-        // Check if all target students have responded
-        const allStudentsResponded = poll.targetStudents.every(studentId =>
-          poll.responses.some(response => response.studentId.toString() === studentId.toString())
-        );
-
-        // Broadcast to all clients
-        io.emit('poll-updated', transformedPoll);
-        console.log('Broadcasted poll update to all clients:', transformedPoll);
-
-        // If all students have responded, schedule poll removal after 10 seconds
-        if (allStudentsResponded) {
-          console.log('All students have responded to poll:', poll._id);
-          setTimeout(async () => {
-            await Poll.findByIdAndDelete(poll._id);
-            io.emit('poll-removed', poll._id);
-            console.log('Poll removed after all responses:', poll._id);
-          }, 10000); // 10 seconds
-        }
+        io.emit('poll-updated', formattedPoll);
+        console.log('Broadcasted poll response:', data);
       }
     } catch (error) {
-      console.error('Error submitting poll response:', error);
+      console.error('Error handling poll response:', error);
     }
   });
 
   // Handle quiz creation
   socket.on('create-quiz', async (data) => {
     try {
-      console.log('Received quiz creation request:', data); // Debug log
-      
       if (!data.createdBy) {
-        console.error('Missing createdBy field in quiz creation request'); // Debug log
         throw new Error('User ID is required to create a quiz');
       }
 
       // Get all registered students
       const students = await User.find({ role: 'student' });
-      console.log('Found students:', students.length); // Debug log
-      
       const studentIds = students.map(student => student._id);
-      console.log('Student IDs for quiz:', studentIds); // Debug log
 
       const quiz = new Quiz({
         title: data.title,
@@ -285,20 +356,13 @@ io.on('connection', (socket) => {
         responses: [],
         targetStudents: studentIds
       });
-      
-      console.log('Created quiz object:', quiz); // Debug log
       await quiz.save();
-      console.log('Saved quiz to database:', quiz._id); // Debug log
 
       // Format the quiz data for emission
       const formattedQuiz = {
         _id: quiz._id,
         title: quiz.title,
-        questions: quiz.questions.map(q => ({
-          question: q.question,
-          options: q.options,
-          correctAnswer: q.correctAnswer
-        })),
+        questions: quiz.questions,
         responses: [],
         targetStudents: studentIds,
         createdAt: quiz.createdAt
@@ -308,12 +372,12 @@ io.on('connection', (socket) => {
       io.emit('quiz-created', formattedQuiz);
       console.log('Broadcasted new quiz to all clients:', formattedQuiz);
 
-      // Remove quiz after 3 minutes
+      // Remove quiz after 5 minutes
       setTimeout(async () => {
         await Quiz.findByIdAndDelete(quiz._id);
         io.emit('quiz-removed', quiz._id);
         console.log('Quiz removed after timeout:', quiz._id);
-      }, 3 * 60 * 1000);
+      }, 5 * 60 * 1000);
     } catch (error) {
       console.error('Error creating quiz:', error);
       socket.emit('quiz-error', { message: error.message });
@@ -325,6 +389,9 @@ io.on('connection', (socket) => {
     try {
       const quiz = await Quiz.findById(data.quizId);
       if (quiz) {
+        // Calculate score
+        const score = calculateScore(quiz.questions, data.answers);
+
         // Find existing response for this student
         const existingResponseIndex = quiz.responses.findIndex(
           r => r.studentId.toString() === data.studentId
@@ -332,97 +399,48 @@ io.on('connection', (socket) => {
 
         if (existingResponseIndex !== -1) {
           // Update existing response
-          quiz.responses[existingResponseIndex] = {
-            studentId: data.studentId,
-            studentName: data.studentName,
-            answers: data.answers,
-            score: calculateScore(quiz.questions, data.answers)
-          };
+          quiz.responses[existingResponseIndex].answers = data.answers;
+          quiz.responses[existingResponseIndex].score = score;
         } else {
           // Add new response
           quiz.responses.push({
             studentId: data.studentId,
             studentName: data.studentName,
             answers: data.answers,
-            score: calculateScore(quiz.questions, data.answers)
+            score: score
           });
         }
 
         await quiz.save();
 
-        // Fetch the updated quiz with populated student information
-        const updatedQuiz = await Quiz.findById(quiz._id)
-          .populate('responses.studentId', 'name');
-
-        // Transform the response data to include student names
-        const transformedQuiz = {
-          _id: updatedQuiz._id,
-          title: updatedQuiz.title,
-          questions: updatedQuiz.questions,
-          responses: updatedQuiz.responses.map(r => ({
-            studentId: r.studentId._id,
-            studentName: r.studentId.name,
-            answers: r.answers,
-            score: r.score
-          })),
-          targetStudents: updatedQuiz.targetStudents,
-          createdAt: updatedQuiz.createdAt
-        };
-
-        // Check if all target students have responded
-        const allStudentsResponded = quiz.targetStudents.every(studentId =>
-          quiz.responses.some(response => response.studentId.toString() === studentId.toString())
-        );
-
-        // Broadcast to all clients
-        io.emit('quiz-updated', transformedQuiz);
-        console.log('Broadcasted quiz update to all clients:', transformedQuiz);
-
-        // If all students have responded, schedule quiz removal after 10 seconds
-        if (allStudentsResponded) {
-          console.log('All students have responded to quiz:', quiz._id);
-          setTimeout(async () => {
-            await Quiz.findByIdAndDelete(quiz._id);
-            io.emit('quiz-removed', quiz._id);
-            console.log('Quiz removed after all responses:', quiz._id);
-          }, 10000); // 10 seconds
-        }
-
-        // Send immediate feedback to the student
-        socket.emit('quiz-feedback', {
+        // Send feedback to the student
+        const feedback = {
           quizId: quiz._id,
-          score: calculateScore(quiz.questions, data.answers),
+          score: score,
           totalQuestions: quiz.questions.length,
-          correctAnswers: quiz.questions.map((q, i) => ({
-            questionIndex: i,
+          correctAnswers: quiz.questions.map((q, index) => ({
+            questionIndex: index,
             correctAnswer: q.correctAnswer
           }))
-        });
+        };
+
+        socket.emit('quiz-feedback', feedback);
+
+        // Broadcast updated quiz to all clients
+        const formattedQuiz = {
+          _id: quiz._id,
+          title: quiz.title,
+          questions: quiz.questions,
+          responses: quiz.responses,
+          targetStudents: quiz.targetStudents,
+          createdAt: quiz.createdAt
+        };
+
+        io.emit('quiz-updated', formattedQuiz);
+        console.log('Broadcasted quiz submission:', data);
       }
     } catch (error) {
-      console.error('Error submitting quiz:', error);
-    }
-  });
-
-  // Helper function to calculate quiz score
-  function calculateScore(questions, answers) {
-    return questions.reduce((score, question, index) => {
-      return score + (question.correctAnswer === answers[index] ? 1 : 0);
-    }, 0);
-  }
-
-  // Handle disconnection
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    // If we have the user's ID stored in the socket, emit a presence update
-    if (socket.userId) {
-      io.emit('presence-update', {
-        studentId: socket.userId,
-        studentName: socket.userName,
-        isPresent: false,
-        lastActive: new Date()
-      });
-      console.log('Broadcasted absence update for disconnected user:', socket.userId);
+      console.error('Error handling quiz submission:', error);
     }
   });
 
@@ -462,8 +480,8 @@ io.on('connection', (socket) => {
   // Handle speech segment
   socket.on('speech-segment', async (data) => {
     try {
-      // Use extractive summary
-      const summary = extractiveSummary(data.text);
+      // Use enhanced summary
+      const summary = enhancedSummary(data.text);
 
       // Find or create session
       let session = await SpeechSession.findOne({ sessionId: data.sessionId });
@@ -524,7 +542,18 @@ io.on('connection', (socket) => {
       console.error('Error handling speech session end:', error);
     }
   });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
 });
+
+// Helper function to calculate quiz score
+function calculateScore(questions, answers) {
+  return questions.reduce((score, question, index) => {
+    return score + (question.correctAnswer === answers[index] ? 1 : 0);
+  }, 0);
+}
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {

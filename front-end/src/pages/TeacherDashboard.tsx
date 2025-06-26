@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import CreatePoll from '../components/teacher/CreatePoll';
 import CreateQuiz from '../components/teacher/CreateQuiz';
+import SpeechRecognition from '../components/teacher/SpeechRecognition';
 import axios from 'axios';
 
 interface Student {
@@ -274,8 +275,8 @@ const TeacherDashboard: React.FC = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Quick Actions */}
-        <div className="mb-8">
+        {/* Action Buttons */}
+        <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
           <div className="flex space-x-4">
             <button
@@ -291,6 +292,15 @@ const TeacherDashboard: React.FC = () => {
               Create Quiz
             </button>
           </div>
+        </div>
+
+        {/* Speech Recognition */}
+        <div className="mb-6">
+          <SpeechRecognition 
+            socket={socket}
+            teacherId={user?._id || ''}
+            teacherName={user?.name || ''}
+          />
         </div>
 
         {/* Student Presence */}

@@ -7,10 +7,12 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import quizRoutes from './routes/quiz.js';
 import userRoutes from './routes/users.js';
+import speechRoutes from './routes/speech.js';
 import { authenticateToken } from './middleware/auth.js';
 import Quiz from './models/Quiz.js';
 import Poll from './models/Poll.js';
 import User from './models/User.js';
+import SpeechSession from './models/SpeechSession.js';
 
 dotenv.config();
 
@@ -22,6 +24,18 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
+
+// Simple extractive summarizer: returns the first sentence or the longest sentence
+function extractiveSummary(text) {
+  if (!text) return '';
+  // Split into sentences (very basic)
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  // Option 1: First sentence
+  if (sentences.length > 0) return sentences[0].trim();
+  // Option 2: Longest sentence (uncomment if you prefer)
+  // return sentences.reduce((a, b) => (a.length > b.length ? a : b), '').trim();
+  return text.trim();
+}
 
 // Middleware
 app.use(cors());
@@ -62,6 +76,7 @@ mongoose.connection.on('reconnected', () => {
 app.use('/api/auth', authRoutes);
 app.use('/api/quiz', authenticateToken, quizRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
+app.use('/api/speech', authenticateToken, speechRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -408,6 +423,105 @@ io.on('connection', (socket) => {
         lastActive: new Date()
       });
       console.log('Broadcasted absence update for disconnected user:', socket.userId);
+    }
+  });
+
+  // Handle speech session start
+  socket.on('speech-session-start', async (data) => {
+    try {
+      console.log('Speech session started:', data);
+      
+      // Generate unique session ID
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create new speech session
+      const session = new SpeechSession({
+        teacherId: data.teacherId,
+        teacherName: data.teacherName,
+        sessionId,
+        segments: [],
+        isActive: true,
+        startedAt: new Date()
+      });
+
+      await session.save();
+
+      // Broadcast session start to all clients
+      io.emit('speech-session-start', {
+        sessionId,
+        teacherName: data.teacherName,
+        timestamp: new Date()
+      });
+
+      console.log('Broadcasted speech session start');
+    } catch (error) {
+      console.error('Error handling speech session start:', error);
+    }
+  });
+
+  // Handle speech segment
+  socket.on('speech-segment', async (data) => {
+    try {
+      // Use extractive summary
+      const summary = extractiveSummary(data.text);
+
+      // Find or create session
+      let session = await SpeechSession.findOne({ sessionId: data.sessionId });
+      if (!session) {
+        session = new SpeechSession({
+          teacherId: data.teacherId,
+          teacherName: data.teacherName,
+          sessionId: data.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          segments: [],
+          isActive: true,
+          startedAt: new Date()
+        });
+      }
+      session.segments.push({
+        text: data.text.trim(),
+        summary,
+        timestamp: data.timestamp || new Date(),
+        confidence: 0.9
+      });
+      await session.save();
+      const summaryObj = {
+        id: session.segments[session.segments.length - 1]._id,
+        teacherId: data.teacherId,
+        teacherName: data.teacherName,
+        summary,
+        originalText: data.text.trim(),
+        timestamp: data.timestamp || new Date(),
+        sessionId: session.sessionId
+      };
+      io.emit('speech-summary', summaryObj);
+    } catch (error) {
+      console.error('Error handling speech segment:', error);
+    }
+  });
+
+  // Handle speech session end
+  socket.on('speech-session-end', async (data) => {
+    try {
+      console.log('Speech session ended:', data);
+      
+      const session = await SpeechSession.findOne({ sessionId: data.sessionId });
+      
+      if (session) {
+        session.isActive = false;
+        session.endedAt = new Date();
+        session.totalDuration = Math.floor((session.endedAt - session.startedAt) / 1000);
+        await session.save();
+      }
+
+      // Broadcast session end to all clients
+      io.emit('speech-session-end', {
+        sessionId: data.sessionId,
+        timestamp: new Date()
+      });
+
+      console.log('Broadcasted speech session end');
+    } catch (error) {
+      console.error('Error handling speech session end:', error);
     }
   });
 });

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import * as faceapi from 'face-api.js';
 import MainLayout from '../layouts/MainLayout';
+import SpeechSummary from '../components/dashboard/SpeechSummary';
 
 interface Poll {
   _id: string;
@@ -443,6 +444,11 @@ const StudentDashboard: React.FC = () => {
               <p className="text-gray-500 text-center">No active polls</p>
             )}
           </div>
+        </div>
+
+        {/* Speech Summary */}
+        <div className="mb-8">
+          <SpeechSummary socket={socket} />
         </div>
       </div>
     </MainLayout>

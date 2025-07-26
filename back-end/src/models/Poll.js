@@ -6,6 +6,10 @@ const responseSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  studentName: {
+    type: String,
+    required: true
+  },
   response: {
     type: String,
     required: true

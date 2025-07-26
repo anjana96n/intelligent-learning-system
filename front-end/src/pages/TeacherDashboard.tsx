@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import CreatePoll from '../components/teacher/CreatePoll';
 import CreateQuiz from '../components/teacher/CreateQuiz';
 import SpeechRecognition from '../components/teacher/SpeechRecognition';
+import StatisticsDashboard from '../components/teacher/StatisticsDashboard';
 import axios from 'axios';
 
 interface Student {
@@ -54,6 +55,7 @@ const TeacherDashboard: React.FC = () => {
   const [socket, setSocket] = useState<any>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [showStatistics, setShowStatistics] = useState(true);
 
   // Helper function to calculate quiz score
   const calculateScore = (answers: number[], questions: Quiz['questions']) => {
@@ -278,7 +280,7 @@ const TeacherDashboard: React.FC = () => {
         {/* Action Buttons */}
         <div className="bg-white shadow rounded-lg p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-          <div className="flex space-x-4">
+          <div className="flex flex-wrap gap-4">
             <button
               onClick={() => setShowCreatePoll(true)}
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
@@ -290,6 +292,16 @@ const TeacherDashboard: React.FC = () => {
               className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
             >
               Create Quiz
+            </button>
+            <button
+              onClick={() => setShowStatistics(!showStatistics)}
+              className={`px-4 py-2 rounded ${
+                showStatistics 
+                  ? 'bg-purple-500 text-white hover:bg-purple-600' 
+                  : 'bg-gray-500 text-white hover:bg-gray-600'
+              }`}
+            >
+              {showStatistics ? 'Show Details' : 'Show Statistics'}
             </button>
           </div>
         </div>
@@ -303,173 +315,189 @@ const TeacherDashboard: React.FC = () => {
           />
         </div>
 
-        {/* Student Presence */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold mb-4">Student Presence</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Student Name
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Active
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {students.map(student => (
-                  <tr key={student.id} className={student.isPresent ? 'bg-green-50' : 'bg-red-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div
-                          className={`w-3 h-3 rounded-full mr-2 ${
-                            student.isPresent ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        />
-                        <span className={`text-sm ${
-                          student.isPresent ? 'text-green-700' : 'text-red-700'
-                        }`}>
-                          {student.isPresent ? 'Present' : 'Absent'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(student.lastActive).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Statistics Dashboard */}
+        {showStatistics && (
+          <div className="mb-6">
+            <StatisticsDashboard 
+              students={students}
+              polls={polls}
+              quizzes={quizzes}
+            />
           </div>
-        </div>
+        )}
 
-        {/* Quiz Responses Section */}
-        <div className="bg-white shadow rounded-lg p-6 mt-8">
-          <h2 className="text-lg font-semibold mb-4">Quiz Responses</h2>
-          <div className="space-y-6">
-            {quizzes.map(quiz => {
-              const responseCount = quiz.responses.length;
-              const totalStudents = quiz.targetStudents.length;
-              const allResponded = responseCount === totalStudents;
-              const averageScore = quiz.responses.length > 0
-                ? quiz.responses.reduce((sum, r) => sum + r.score, 0) / quiz.responses.length
-                : 0;
-
-              return (
-                <div key={quiz._id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-medium">{quiz.title}</h3>
-                    <div className="text-sm text-gray-500">
-                      Responses: {responseCount}/{totalStudents}
-                      {allResponded && (
-                        <span className="ml-2 text-green-500">(All responded)</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {quiz.questions.map((question, qIndex) => (
-                      <div key={qIndex} className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium mb-2">{question.question}</h4>
-                        <div className="space-y-2">
-                          {quiz.responses.map(response => (
-                            <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
-                              <div className="flex items-center space-x-4">
-                                <span className="text-gray-700">{response.studentName}</span>
-                                <span className="text-sm text-gray-500">
-                                  Selected: Option {response.answers[qIndex] + 1}
-                                </span>
-                                <span className={`text-sm ${
-                                  response.answers[qIndex] === question.correctAnswer
-                                    ? 'text-green-500'
-                                    : 'text-red-500'
-                                }`}>
-                                  {response.answers[qIndex] === question.correctAnswer
-                                    ? '✓ Correct'
-                                    : '✗ Incorrect'}
-                                </span>
-                              </div>
-                              <span className="text-sm text-gray-500">
-                                Score: {response.score}/{quiz.questions.length}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-2 text-sm text-gray-500">
-                          Correct Answer: Option {question.correctAnswer + 1}
-                        </div>
-                      </div>
+        {/* Detailed Views */}
+        {!showStatistics && (
+          <>
+            {/* Student Presence */}
+            <div className="bg-white shadow rounded-lg p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Student Presence</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Student Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Last Active
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {students.map(student => (
+                      <tr key={student.id} className={student.isPresent ? 'bg-green-50' : 'bg-red-50'}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div
+                              className={`w-3 h-3 rounded-full mr-2 ${
+                                student.isPresent ? 'bg-green-500' : 'bg-red-500'
+                              }`}
+                            />
+                            <span className={`text-sm ${
+                              student.isPresent ? 'text-green-700' : 'text-red-700'
+                            }`}>
+                              {student.isPresent ? 'Present' : 'Absent'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(student.lastActive).toLocaleTimeString()}
+                        </td>
+                      </tr>
                     ))}
-                    <div className="mt-4 text-sm text-gray-500">
-                      Average Score: {averageScore.toFixed(1)}/{quiz.questions.length}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {quizzes.length === 0 && (
-              <p className="text-gray-500 text-center">No active quizzes</p>
-            )}
-          </div>
-        </div>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-        {/* Poll Responses Section */}
-        <div className="bg-white shadow rounded-lg p-6 mt-8">
-          <h2 className="text-lg font-semibold mb-4">Poll Responses</h2>
-          <div className="space-y-6">
-            {polls.map(poll => {
-              const responseCount = poll.responses.length;
-              const totalStudents = poll.targetStudents.length;
-              const allResponded = responseCount === totalStudents;
+            {/* Quiz Responses Section */}
+            <div className="bg-white shadow rounded-lg p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Quiz Responses</h2>
+              <div className="space-y-6">
+                {quizzes.map(quiz => {
+                  const responseCount = quiz.responses.length;
+                  const totalStudents = quiz.targetStudents.length;
+                  const allResponded = responseCount === totalStudents;
+                  const averageScore = quiz.responses.length > 0
+                    ? quiz.responses.reduce((sum, r) => sum + r.score, 0) / quiz.responses.length
+                    : 0;
 
-              return (
-                <div key={poll._id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-medium">{poll.question}</h3>
-                    <div className="text-sm text-gray-500">
-                      Responses: {responseCount}/{totalStudents}
-                      {allResponded && (
-                        <span className="ml-2 text-green-500">(All responded)</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {poll.options.map((option, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium mb-2">{option}</h4>
-                        <div className="space-y-2">
-                          {poll.responses
-                            .filter(response => response.response === option)
-                            .map(response => (
-                              <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
-                                <span className="text-gray-700">{response.studentName}</span>
-                                <span className="text-sm text-gray-500">
-                                  {new Date(poll.createdAt).toLocaleTimeString()}
-                                </span>
-                              </div>
-                            ))}
-                          {poll.responses.filter(response => response.response === option).length === 0 && (
-                            <p className="text-gray-500 text-sm">No responses yet</p>
+                  return (
+                    <div key={quiz._id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-medium">{quiz.title}</h3>
+                        <div className="text-sm text-gray-500">
+                          Responses: {responseCount}/{totalStudents}
+                          {allResponded && (
+                            <span className="ml-2 text-green-500">(All responded)</span>
                           )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {polls.length === 0 && (
-              <p className="text-gray-500 text-center">No active polls</p>
-            )}
-          </div>
-        </div>
+                      <div className="space-y-4">
+                        {quiz.questions.map((question, qIndex) => (
+                          <div key={qIndex} className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="font-medium mb-2">{question.question}</h4>
+                            <div className="space-y-2">
+                              {quiz.responses.map(response => (
+                                <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
+                                  <div className="flex items-center space-x-4">
+                                    <span className="text-gray-700">{response.studentName}</span>
+                                    <span className="text-sm text-gray-500">
+                                      Selected: Option {response.answers[qIndex] + 1}
+                                    </span>
+                                    <span className={`text-sm ${
+                                      response.answers[qIndex] === question.correctAnswer
+                                        ? 'text-green-500'
+                                        : 'text-red-500'
+                                    }`}>
+                                      {response.answers[qIndex] === question.correctAnswer
+                                        ? '✓ Correct'
+                                        : '✗ Incorrect'}
+                                    </span>
+                                  </div>
+                                  <span className="text-sm text-gray-500">
+                                    Score: {response.score}/{quiz.questions.length}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-2 text-sm text-gray-500">
+                              Correct Answer: Option {question.correctAnswer + 1}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="mt-4 text-sm text-gray-500">
+                          Average Score: {averageScore.toFixed(1)}/{quiz.questions.length}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {quizzes.length === 0 && (
+                  <p className="text-gray-500 text-center">No active quizzes</p>
+                )}
+              </div>
+            </div>
+
+            {/* Poll Responses Section */}
+            <div className="bg-white shadow rounded-lg p-6 mb-6">
+              <h2 className="text-lg font-semibold mb-4">Poll Responses</h2>
+              <div className="space-y-6">
+                {polls.map(poll => {
+                  const responseCount = poll.responses.length;
+                  const totalStudents = poll.targetStudents.length;
+                  const allResponded = responseCount === totalStudents;
+
+                  return (
+                    <div key={poll._id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-medium">{poll.question}</h3>
+                        <div className="text-sm text-gray-500">
+                          Responses: {responseCount}/{totalStudents}
+                          {allResponded && (
+                            <span className="ml-2 text-green-500">(All responded)</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        {poll.options.map((option, index) => (
+                          <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="font-medium mb-2">{option}</h4>
+                            <div className="space-y-2">
+                              {poll.responses
+                                .filter(response => response.response === option)
+                                .map(response => (
+                                  <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
+                                    <span className="text-gray-700">{response.studentName}</span>
+                                    <span className="text-sm text-gray-500">
+                                      {new Date(poll.createdAt).toLocaleTimeString()}
+                                    </span>
+                                  </div>
+                                ))}
+                              {poll.responses.filter(response => response.response === option).length === 0 && (
+                                <p className="text-gray-500 text-sm">No responses yet</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {polls.length === 0 && (
+                  <p className="text-gray-500 text-center">No active polls</p>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Create Poll Modal */}

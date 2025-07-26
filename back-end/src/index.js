@@ -199,7 +199,7 @@ io.on('connection', (socket) => {
           options: poll.options,
           responses: poll.responses.map(r => ({
             studentId: r.studentId,
-            studentName: r.studentId.name,
+            studentName: r.studentName,
             response: r.response
           })),
           targetStudents: poll.targetStudents,
@@ -305,10 +305,12 @@ io.on('connection', (socket) => {
         if (existingResponseIndex !== -1) {
           // Update existing response
           poll.responses[existingResponseIndex].response = data.response;
+          poll.responses[existingResponseIndex].studentName = data.studentName;
         } else {
           // Add new response
           poll.responses.push({
             studentId: data.studentId,
+            studentName: data.studentName,
             response: data.response
           });
         }
@@ -322,7 +324,7 @@ io.on('connection', (socket) => {
           options: poll.options,
           responses: poll.responses.map(r => ({
             studentId: r.studentId,
-            studentName: r.studentId.name,
+            studentName: r.studentName,
             response: r.response
           })),
           targetStudents: poll.targetStudents,

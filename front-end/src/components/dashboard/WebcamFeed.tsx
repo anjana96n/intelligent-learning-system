@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, Eye } from 'lucide-react';
 import * as faceapi from 'face-api.js';
 
 export default function WebcamFeed() {
@@ -49,23 +49,35 @@ export default function WebcamFeed() {
   }, []);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Webcam Feed</h2>
-        <div
-          className={`h-4 w-4 rounded-full ${
-            faceDetected ? 'bg-green-500' : 'bg-red-500'
-          }`}
-        ></div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Camera className="h-5 w-5 text-blue-200" />
+          <h2 className="text-lg font-semibold text-white">Face Detection</h2>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Eye className={`h-4 w-4 ${faceDetected ? 'text-green-400' : 'text-red-400'}`} />
+          <span className={`text-sm ${faceDetected ? 'text-green-400' : 'text-red-400'}`}>
+            {faceDetected ? 'Face Detected' : 'No Face'}
+          </span>
+        </div>
       </div>
-      <div className="bg-gray-100 rounded-lg aspect-video">
+      <div className="relative bg-black/20 rounded-xl overflow-hidden aspect-video">
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="w-full h-full object-cover rounded-lg"
+          className="w-full h-full object-cover"
         />
+        {!faceDetected && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <div className="text-center">
+              <Eye className="h-12 w-12 text-red-400 mx-auto mb-2" />
+              <p className="text-red-200 text-sm">No face detected</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

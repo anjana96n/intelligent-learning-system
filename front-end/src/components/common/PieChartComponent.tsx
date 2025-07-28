@@ -32,6 +32,29 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
     return null;
   };
 
+  // Custom label component with smaller font size
+  const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+    if (percent === 0) return null;
+    
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text 
+        x={x} 
+        y={y} 
+        fill="white" 
+        textAnchor="middle" 
+        dominantBaseline="central"
+        style={{ fontSize: '10px', fontWeight: 'bold' }}
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
   return (
     <div className="bg-white p-4 rounded-lg shadow-md">
       <h3 className="text-lg font-semibold mb-4 text-center">{title}</h3>
@@ -42,7 +65,7 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
             cx="50%"
             cy="50%"
             labelLine={false}
-            label={({ percent }) => percent ? `${(percent * 100).toFixed(0)}%` : ''}
+            label={<CustomLabel />}
             outerRadius={80}
             fill="#8884d8"
             dataKey="value"
@@ -53,8 +76,8 @@ const PieChartComponent: React.FC<PieChartComponentProps> = ({
           </Pie>
           <Tooltip content={<CustomTooltip />} />
           <Legend 
-            wrapperStyle={{ fontSize: '12px' }}
-            formatter={(value) => <span style={{ fontSize: '12px' }}>{value}</span>}
+            wrapperStyle={{ fontSize: '11px' }}
+            formatter={(value) => <span style={{ fontSize: '11px' }}>{value}</span>}
           />
         </PieChart>
       </ResponsiveContainer>

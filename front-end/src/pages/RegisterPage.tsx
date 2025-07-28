@@ -1,32 +1,28 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
 import { Brain, GraduationCap, User, Mail, Lock, Eye, EyeOff, BookOpen, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-const RegisterForm: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState<'student' | 'teacher'>('student');
+export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const { register } = useAuth();
-  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'student'
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    try {
-      await register(email, password, role, name);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred during registration');
-    }
+    // Handle registration logic here
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
   };
 
   return (
@@ -71,12 +67,6 @@ const RegisterForm: React.FC = () => {
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="bg-red-500/20 border border-red-400/50 text-red-200 px-4 py-3 rounded-lg relative" role="alert">
-                  <span className="block sm:inline">{error}</span>
-                </div>
-              )}
-
               {/* Full Name Field */}
               <div className="space-y-2">
                 <label htmlFor="name" className="block text-sm font-medium text-purple-100">
@@ -87,11 +77,11 @@ const RegisterForm: React.FC = () => {
                     id="name"
                     name="name"
                     type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    value={formData.name}
+                    onChange={handleInputChange}
                     className="w-full px-4 py-3 pl-12 bg-white/10 border border-white/20 rounded-lg text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-200"
                     placeholder="Enter your full name"
+                    required
                   />
                   <User className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-200" />
                 </div>
@@ -107,12 +97,11 @@ const RegisterForm: React.FC = () => {
                     id="email"
                     name="email"
                     type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={formData.email}
+                    onChange={handleInputChange}
                     className="w-full px-4 py-3 pl-12 bg-white/10 border border-white/20 rounded-lg text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-200"
                     placeholder="Enter your email"
+                    required
                   />
                   <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-200" />
                 </div>
@@ -128,12 +117,11 @@ const RegisterForm: React.FC = () => {
                     id="password"
                     name="password"
                     type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={formData.password}
+                    onChange={handleInputChange}
                     className="w-full px-4 py-3 pl-12 pr-12 bg-white/10 border border-white/20 rounded-lg text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-200"
                     placeholder="Create a password"
+                    required
                   />
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-200" />
                   <button
@@ -156,12 +144,11 @@ const RegisterForm: React.FC = () => {
                     id="confirmPassword"
                     name="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
                     className="w-full px-4 py-3 pl-12 pr-12 bg-white/10 border border-white/20 rounded-lg text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-200"
                     placeholder="Confirm your password"
+                    required
                   />
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-200" />
                   <button
@@ -176,7 +163,7 @@ const RegisterForm: React.FC = () => {
 
               {/* Role Selection */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-purple-100">
+                <label htmlFor="role" className="block text-sm font-medium text-purple-100">
                   I am a
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -185,12 +172,12 @@ const RegisterForm: React.FC = () => {
                       type="radio"
                       name="role"
                       value="student"
-                      checked={role === 'student'}
-                      onChange={(e) => setRole(e.target.value as 'student' | 'teacher')}
+                      checked={formData.role === 'student'}
+                      onChange={handleInputChange}
                       className="sr-only"
                     />
                     <div className={`flex items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-                      role === 'student' 
+                      formData.role === 'student' 
                         ? 'border-purple-400 bg-purple-400/20' 
                         : 'border-white/20 bg-white/10 hover:bg-white/20'
                     }`}>
@@ -203,12 +190,12 @@ const RegisterForm: React.FC = () => {
                       type="radio"
                       name="role"
                       value="teacher"
-                      checked={role === 'teacher'}
-                      onChange={(e) => setRole(e.target.value as 'student' | 'teacher')}
+                      checked={formData.role === 'teacher'}
+                      onChange={handleInputChange}
                       className="sr-only"
                     />
                     <div className={`flex items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-                      role === 'teacher' 
+                      formData.role === 'teacher' 
                         ? 'border-purple-400 bg-purple-400/20' 
                         : 'border-white/20 bg-white/10 hover:bg-white/20'
                     }`}>
@@ -262,6 +249,4 @@ const RegisterForm: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default RegisterForm; 
+} 

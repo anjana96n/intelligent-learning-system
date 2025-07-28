@@ -7,18 +7,18 @@ interface SidebarProps {
 
 export default function Sidebar({ onLogout }: SidebarProps) {
   return (
-    <aside className="bg-white w-64 min-h-screen p-4 border-r border-gray-200">
+    <aside className="backdrop-blur-xl bg-white/10 border-r border-white/20 w-64 min-h-screen p-4">
       <nav className="space-y-6">
         <div className="space-y-2">
-          <a href="/dashboard" className="flex items-center space-x-3 text-gray-700 p-2 rounded-lg hover:bg-[#4AA7EF] hover:text-white">
+          <a href="/dashboard" className="flex items-center space-x-3 text-blue-100 p-3 rounded-lg hover:bg-white/10 hover:text-white transition-all duration-200">
             <Home className="h-5 w-5" />
             <span>Dashboard</span>
           </a>
         </div>
-        <div className="pt-6 border-t border-gray-200">
+        <div className="pt-6 border-t border-white/20">
           <button 
             onClick={onLogout}
-            className="flex items-center space-x-3 text-gray-700 p-2 rounded-lg hover:bg-red-100 hover:text-red-500 w-full"
+            className="flex items-center space-x-3 text-red-200 p-3 rounded-lg hover:bg-red-500/20 hover:text-red-100 transition-all duration-200 w-full"
           >
             <LogOut className="h-5 w-5" />
             <span>Logout</span>

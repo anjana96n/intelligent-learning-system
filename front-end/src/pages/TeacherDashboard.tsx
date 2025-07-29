@@ -5,6 +5,8 @@ import { io } from 'socket.io-client';
 import CreatePoll from '../components/teacher/CreatePoll';
 import CreateQuiz from '../components/teacher/CreateQuiz';
 import SpeechRecognition from '../components/teacher/SpeechRecognition';
+import StatisticsDashboard from '../components/teacher/StatisticsDashboard';
+import { Brain, GraduationCap, Users, BarChart3, Plus, Eye } from 'lucide-react';
 import axios from 'axios';
 
 interface Student {
@@ -54,6 +56,7 @@ const TeacherDashboard: React.FC = () => {
   const [socket, setSocket] = useState<any>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [showStatistics, setShowStatistics] = useState(true);
 
   // Helper function to calculate quiz score
   const calculateScore = (answers: number[], questions: Quiz['questions']) => {
@@ -252,223 +255,295 @@ const TeacherDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navigation Bar */}
-      <nav className="bg-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold">Teacher Dashboard</h1>
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+        <div className="absolute inset-0 bg-black/10"></div>
+        
+        {/* Floating Elements */}
+        <div className="absolute top-20 left-10 w-20 h-20 bg-white/5 rounded-full blur-xl animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-32 h-32 bg-purple-400/10 rounded-full blur-xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-20 left-1/4 w-24 h-24 bg-pink-400/10 rounded-full blur-xl animate-pulse delay-2000"></div>
+        <div className="absolute bottom-40 right-1/3 w-16 h-16 bg-indigo-400/10 rounded-full blur-xl animate-pulse delay-3000"></div>
+        
+        {/* Grid Pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}></div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 min-h-screen flex flex-col">
+        {/* Navigation Bar */}
+        <nav className="backdrop-blur-xl bg-white/10 border-b border-white/20 shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between h-16">
+              <div className="flex items-center">
+                <div className="relative">
+                  <Brain className="h-8 w-8 text-white" />
+                  <GraduationCap className="h-6 w-6 text-purple-300 absolute -top-1 -right-1" />
+                </div>
+                <h1 className="ml-2 text-xl font-semibold text-white">Teacher Dashboard</h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                <span className="text-purple-100">Welcome, {user?.name}</span>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-500/20 border border-red-400/50 text-red-200 px-4 py-2 rounded-lg hover:bg-red-500/30 transition-all duration-200"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-gray-700">Welcome, {user?.name}</span>
+          </div>
+        </nav>
+
+        {/* Main Content */}
+        <div className="flex-1 max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          {/* Welcome Header */}
+          <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+            <h1 className="text-3xl font-bold text-white mb-2">Welcome to JoyStudy</h1>
+            <p className="text-purple-100">Your intelligent teaching dashboard</p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+              <Plus className="h-5 w-5 mr-2 text-purple-300" />
+              Quick Actions
+            </h2>
+            <div className="flex flex-wrap gap-4">
               <button
-                onClick={handleLogout}
-                className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                onClick={() => setShowCreatePoll(true)}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg hover:scale-105 transition-all duration-200 flex items-center"
               >
-                Logout
+                <Users className="h-5 w-5 mr-2" />
+                Create Poll
+              </button>
+              <button
+                onClick={() => setShowCreateQuiz(true)}
+                className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white px-6 py-3 rounded-lg hover:scale-105 transition-all duration-200 flex items-center"
+              >
+                <Brain className="h-5 w-5 mr-2" />
+                Create Quiz
+              </button>
+              <button
+                onClick={() => setShowStatistics(!showStatistics)}
+                className={`px-6 py-3 rounded-lg hover:scale-105 transition-all duration-200 flex items-center min-w-[160px] justify-center ${
+                  showStatistics 
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white' 
+                    : 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
+                }`}
+              >
+                <BarChart3 className="h-5 w-5 mr-2" />
+                {showStatistics ? 'Show Details' : 'Show Statistics'}
               </button>
             </div>
           </div>
-        </div>
-      </nav>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Action Buttons */}
-        <div className="bg-white shadow rounded-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setShowCreatePoll(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-            >
-              Create Poll
-            </button>
-            <button
-              onClick={() => setShowCreateQuiz(true)}
-              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-            >
-              Create Quiz
-            </button>
+          {/* Speech Recognition */}
+          <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+            <SpeechRecognition 
+              socket={socket}
+              teacherId={user?._id || ''}
+              teacherName={user?.name || ''}
+            />
           </div>
-        </div>
 
-        {/* Speech Recognition */}
-        <div className="mb-6">
-          <SpeechRecognition 
-            socket={socket}
-            teacherId={user?._id || ''}
-            teacherName={user?.name || ''}
-          />
-        </div>
+          {/* Statistics Dashboard */}
+          {showStatistics && (
+            <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+              <StatisticsDashboard 
+                students={students}
+                polls={polls}
+                quizzes={quizzes}
+              />
+            </div>
+          )}
 
-        {/* Student Presence */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold mb-4">Student Presence</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Student Name
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Active
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {students.map(student => (
-                  <tr key={student.id} className={student.isPresent ? 'bg-green-50' : 'bg-red-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div
-                          className={`w-3 h-3 rounded-full mr-2 ${
-                            student.isPresent ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        />
-                        <span className={`text-sm ${
-                          student.isPresent ? 'text-green-700' : 'text-red-700'
-                        }`}>
-                          {student.isPresent ? 'Present' : 'Absent'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(student.lastActive).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Quiz Responses Section */}
-        <div className="bg-white shadow rounded-lg p-6 mt-8">
-          <h2 className="text-lg font-semibold mb-4">Quiz Responses</h2>
-          <div className="space-y-6">
-            {quizzes.map(quiz => {
-              const responseCount = quiz.responses.length;
-              const totalStudents = quiz.targetStudents.length;
-              const allResponded = responseCount === totalStudents;
-              const averageScore = quiz.responses.length > 0
-                ? quiz.responses.reduce((sum, r) => sum + r.score, 0) / quiz.responses.length
-                : 0;
-
-              return (
-                <div key={quiz._id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-medium">{quiz.title}</h3>
-                    <div className="text-sm text-gray-500">
-                      Responses: {responseCount}/{totalStudents}
-                      {allResponded && (
-                        <span className="ml-2 text-green-500">(All responded)</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {quiz.questions.map((question, qIndex) => (
-                      <div key={qIndex} className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium mb-2">{question.question}</h4>
-                        <div className="space-y-2">
-                          {quiz.responses.map(response => (
-                            <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
-                              <div className="flex items-center space-x-4">
-                                <span className="text-gray-700">{response.studentName}</span>
-                                <span className="text-sm text-gray-500">
-                                  Selected: Option {response.answers[qIndex] + 1}
-                                </span>
-                                <span className={`text-sm ${
-                                  response.answers[qIndex] === question.correctAnswer
-                                    ? 'text-green-500'
-                                    : 'text-red-500'
-                                }`}>
-                                  {response.answers[qIndex] === question.correctAnswer
-                                    ? '✓ Correct'
-                                    : '✗ Incorrect'}
-                                </span>
-                              </div>
-                              <span className="text-sm text-gray-500">
-                                Score: {response.score}/{quiz.questions.length}
+          {/* Detailed Views */}
+          {!showStatistics && (
+            <>
+              {/* Student Presence */}
+              <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <Eye className="h-5 w-5 mr-2 text-green-300" />
+                  Student Presence
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-white/20">
+                    <thead className="bg-white/5">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">
+                          Student Name
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">
+                          Last Active
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white/5 divide-y divide-white/20">
+                      {students.map(student => (
+                        <tr key={student.id} className={student.isPresent ? 'bg-green-500/10' : 'bg-red-500/10'}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-white">{student.name}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div
+                                className={`w-3 h-3 rounded-full mr-2 ${
+                                  student.isPresent ? 'bg-green-400' : 'bg-red-400'
+                                }`}
+                              />
+                              <span className={`text-sm ${
+                                student.isPresent ? 'text-green-300' : 'text-red-300'
+                              }`}>
+                                {student.isPresent ? 'Present' : 'Absent'}
                               </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                            {new Date(student.lastActive).toLocaleTimeString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Quiz Responses Section */}
+              <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <Brain className="h-5 w-5 mr-2 text-purple-300" />
+                  Quiz Responses
+                </h2>
+                <div className="space-y-6">
+                  {quizzes.map(quiz => {
+                    const responseCount = quiz.responses.length;
+                    const totalStudents = quiz.targetStudents.length;
+                    const allResponded = responseCount === totalStudents;
+                    const averageScore = quiz.responses.length > 0
+                      ? quiz.responses.reduce((sum, r) => sum + r.score, 0) / quiz.responses.length
+                      : 0;
+
+                    return (
+                      <div key={quiz._id} className="border border-white/20 rounded-lg p-4 bg-white/5">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="font-medium text-white">{quiz.title}</h3>
+                          <div className="text-sm text-blue-200">
+                            Responses: {responseCount}/{totalStudents}
+                            {allResponded && (
+                              <span className="ml-2 text-green-400">(All responded)</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          {quiz.questions.map((question, qIndex) => (
+                            <div key={qIndex} className="bg-white/10 p-4 rounded-lg border border-white/20">
+                              <h4 className="font-medium mb-2 text-white">{question.question}</h4>
+                              <div className="space-y-2">
+                                {quiz.responses.map(response => (
+                                  <div key={response.studentId} className="flex items-center justify-between bg-white/10 p-2 rounded border border-white/20">
+                                    <div className="flex items-center space-x-4">
+                                      <span className="text-blue-100">{response.studentName}</span>
+                                      <span className="text-sm text-blue-200">
+                                        Selected: Option {response.answers[qIndex] + 1}
+                                      </span>
+                                      <span className={`text-sm ${
+                                        response.answers[qIndex] === question.correctAnswer
+                                          ? 'text-green-400'
+                                          : 'text-red-400'
+                                      }`}>
+                                        {response.answers[qIndex] === question.correctAnswer
+                                          ? '✓ Correct'
+                                          : '✗ Incorrect'}
+                                      </span>
+                                    </div>
+                                    <span className="text-sm text-blue-200">
+                                      Score: {response.score}/{quiz.questions.length}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-2 text-sm text-blue-200">
+                                Correct Answer: Option {question.correctAnswer + 1}
+                              </div>
+                            </div>
+                          ))}
+                          <div className="mt-4 text-sm text-blue-200">
+                            Average Score: {averageScore.toFixed(1)}/{quiz.questions.length}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {quizzes.length === 0 && (
+                    <p className="text-blue-200 text-center">No active quizzes</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Poll Responses Section */}
+              <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-green-300" />
+                  Poll Responses
+                </h2>
+                <div className="space-y-6">
+                  {polls.map(poll => {
+                    const responseCount = poll.responses.length;
+                    const totalStudents = poll.targetStudents.length;
+                    const allResponded = responseCount === totalStudents;
+
+                    return (
+                      <div key={poll._id} className="border border-white/20 rounded-lg p-4 bg-white/5">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="font-medium text-white">{poll.question}</h3>
+                          <div className="text-sm text-blue-200">
+                            Responses: {responseCount}/{totalStudents}
+                            {allResponded && (
+                              <span className="ml-2 text-green-400">(All responded)</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-4">
+                          {poll.options.map((option, index) => (
+                            <div key={index} className="bg-white/10 p-4 rounded-lg border border-white/20">
+                              <h4 className="font-medium mb-2 text-white">{option}</h4>
+                              <div className="space-y-2">
+                                {poll.responses
+                                  .filter(response => response.response === option)
+                                  .map(response => (
+                                    <div key={response.studentId} className="flex items-center justify-between bg-white/10 p-2 rounded border border-white/20">
+                                      <span className="text-blue-100">{response.studentName}</span>
+                                      <span className="text-sm text-blue-200">
+                                        {new Date(poll.createdAt).toLocaleTimeString()}
+                                      </span>
+                                    </div>
+                                  ))}
+                                {poll.responses.filter(response => response.response === option).length === 0 && (
+                                  <p className="text-blue-200 text-sm">No responses yet</p>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
-                        <div className="mt-2 text-sm text-gray-500">
-                          Correct Answer: Option {question.correctAnswer + 1}
-                        </div>
                       </div>
-                    ))}
-                    <div className="mt-4 text-sm text-gray-500">
-                      Average Score: {averageScore.toFixed(1)}/{quiz.questions.length}
-                    </div>
-                  </div>
+                    );
+                  })}
+                  {polls.length === 0 && (
+                    <p className="text-blue-200 text-center">No active polls</p>
+                  )}
                 </div>
-              );
-            })}
-            {quizzes.length === 0 && (
-              <p className="text-gray-500 text-center">No active quizzes</p>
-            )}
-          </div>
-        </div>
-
-        {/* Poll Responses Section */}
-        <div className="bg-white shadow rounded-lg p-6 mt-8">
-          <h2 className="text-lg font-semibold mb-4">Poll Responses</h2>
-          <div className="space-y-6">
-            {polls.map(poll => {
-              const responseCount = poll.responses.length;
-              const totalStudents = poll.targetStudents.length;
-              const allResponded = responseCount === totalStudents;
-
-              return (
-                <div key={poll._id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-medium">{poll.question}</h3>
-                    <div className="text-sm text-gray-500">
-                      Responses: {responseCount}/{totalStudents}
-                      {allResponded && (
-                        <span className="ml-2 text-green-500">(All responded)</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    {poll.options.map((option, index) => (
-                      <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium mb-2">{option}</h4>
-                        <div className="space-y-2">
-                          {poll.responses
-                            .filter(response => response.response === option)
-                            .map(response => (
-                              <div key={response.studentId} className="flex items-center justify-between bg-white p-2 rounded">
-                                <span className="text-gray-700">{response.studentName}</span>
-                                <span className="text-sm text-gray-500">
-                                  {new Date(poll.createdAt).toLocaleTimeString()}
-                                </span>
-                              </div>
-                            ))}
-                          {poll.responses.filter(response => response.response === option).length === 0 && (
-                            <p className="text-gray-500 text-sm">No responses yet</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {polls.length === 0 && (
-              <p className="text-gray-500 text-center">No active polls</p>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

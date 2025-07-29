@@ -2,8 +2,10 @@ import express from 'express';
 import natural from 'natural';
 import SpeechSession from '../models/SpeechSession.js';
 import { authenticateToken } from '../middleware/auth.js';
+import GradioSummarizationService from '../services/GradioSummarizationService.js';
 
 const router = express.Router();
+const gradioService = new GradioSummarizationService();
 
 // Educational keywords that indicate important content
 const EDUCATIONAL_KEYWORDS = [
@@ -15,7 +17,7 @@ const EDUCATIONAL_KEYWORDS = [
   'first', 'second', 'third', 'finally', 'in conclusion', 'summary'
 ];
 
-// Enhanced multi-factor summarizer
+// Enhanced multi-factor summarizer (fallback)
 function enhancedSummary(text) {
   if (!text || text.length < 50) return text;
   
@@ -157,8 +159,23 @@ router.post('/segment/process', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Generate enhanced summary
-    const summary = enhancedSummary(text);
+    // Use Gradio service for summarization
+    let summary;
+    let confidence = 0.9;
+    let modelUsed = 'gradio';
+
+    try {
+      const summaryResult = await gradioService.summarize(text);
+      summary = summaryResult.summary;
+      confidence = summaryResult.confidence;
+      modelUsed = summaryResult.modelUsed;
+    } catch (error) {
+      console.error('Gradio summarization failed, using fallback:', error);
+      // Fallback to local summarization
+      summary = enhancedSummary(text);
+      confidence = 0.6;
+      modelUsed = 'fallback';
+    }
 
     // Find or create session
     let session = await SpeechSession.findOne({ sessionId });
@@ -180,7 +197,8 @@ router.post('/segment/process', authenticateToken, async (req, res) => {
       text: text.trim(),
       summary,
       timestamp: timestamp || new Date(),
-      confidence: 0.9
+      confidence,
+      modelUsed
     });
 
     await session.save();
@@ -193,7 +211,9 @@ router.post('/segment/process', authenticateToken, async (req, res) => {
       summary,
       originalText: text.trim(),
       timestamp: timestamp || new Date(),
-      sessionId
+      sessionId,
+      confidence,
+      modelUsed
     };
 
     res.json({

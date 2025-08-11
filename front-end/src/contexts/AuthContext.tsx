@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUser = async () => {
     try {
       const API = import.meta.env.VITE_API_URL;
-      const response = await axios.get(`${API}api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await axios.get(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
       setUser(response.data);
     } catch (error) {
       console.error('Error fetching user:', error);
@@ -44,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     try {
       const API = import.meta.env.VITE_API_URL;
-      const response = await axios.post(`${API}api/auth/login`, { email, password });
+      const response = await axios.post(`${API}/api/auth/login`, { email, password });
       const { token, user } = response.data;
       localStorage.setItem('token', token);
       setToken(token);
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (email: string, password: string, role: 'student' | 'teacher', name: string) => {
     try {
       const API = import.meta.env.VITE_API_URL;
-      const response = await axios.post(`${API}api/auth/register`, { email, password, role, name });
+      const response = await axios.post(`${API}/api/auth/register`, { email, password, role, name });
       const { token, user } = response.data;
       localStorage.setItem('token', token);
       setToken(token);

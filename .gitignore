@@ -23,6 +23,9 @@ yarn-error.log*
 *.swp
 *.swo
 
+# Model outputs
+summery/outputs/
+
 # OS
 .DS_Store
 Thumbs.db 

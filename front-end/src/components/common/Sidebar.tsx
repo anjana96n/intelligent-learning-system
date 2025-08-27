@@ -13,6 +13,7 @@ export default function Sidebar({ onLogout }: SidebarProps) {
   
   const isActive = (path: string) => location.pathname === path;
 
+
   return (
     <aside className="backdrop-blur-xl bg-white/10 border-r border-white/20 w-64 min-h-screen p-4">
       <nav className="space-y-6">

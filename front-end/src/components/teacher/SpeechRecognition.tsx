@@ -20,7 +20,6 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [transcript, setTranscript] = useState('');
-
   const [currentSegment, setCurrentSegment] = useState('');
   const [segments, setSegments] = useState<SpeechSegment[]>([]);
   const [error, setError] = useState<string | null>(null);

@@ -11,7 +11,6 @@ interface SpeechSummary {
   sessionId: string;
   confidence?: number;
   modelUsed?: string;
-}
 
 interface SpeechSummaryProps {
   socket: any;
@@ -196,6 +195,7 @@ const SpeechSummary: React.FC<SpeechSummaryProps> = ({ socket }) => {
             <button
               onClick={() => setSummaries([])}
               className="text-blue-500 hover:text-blue-700 hover:underline"
+
             >
               Clear all
             </button>

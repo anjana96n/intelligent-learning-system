@@ -20,7 +20,7 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [transcriptSummary, setTranscriptSummary] = useState<string>('');
+
   const [currentSegment, setCurrentSegment] = useState('');
   const [segments, setSegments] = useState<SpeechSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -30,12 +30,34 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
   const [sessionId, setSessionId] = useState<string>(Date.now().toString());
   
   const recognitionRef = useRef<any>(null);
-  const segmentTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const t5Service = T5SummarizationService.getInstance();
 
+  // Smart truncation that preserves complete words and sentences
+  const smartTruncate = (text: string, maxLength: number = 80) => {
+    if (!text || text.length <= maxLength) return text;
+    
+    // First try to find a complete sentence within the limit
+    const sentences = text.match(/[^.!?]+[.!?]+/g);
+    if (sentences && sentences[0] && sentences[0].length <= maxLength) {
+      return sentences[0].trim();
+    }
+    
+    // If no complete sentence fits, truncate at word boundary
+    const truncated = text.substring(0, maxLength);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    
+    if (lastSpaceIndex > maxLength * 0.7) { // Only truncate at space if it's not too early
+      return truncated.substring(0, lastSpaceIndex).trim() + '...';
+    }
+    
+    // If we can't find a good word boundary, just truncate and add ellipsis
+    return truncated.trim() + '...';
+  };
+
   // Process buffered text into a meaningful segment
-  const processBufferedText = async (bufferedText: string, fullTranscript: string) => {
+  const processBufferedText = async (bufferedText: string) => {
     if (!bufferedText.trim()) return;
     
     // Clear any existing timeout
@@ -61,16 +83,7 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
 
     setSegments(prev => [...prev, newSegment]);
     setPendingText(''); // Clear the buffer
-    
-    // Generate summary for the full transcript
-    if (fullTranscript.trim().length > 50) {
-      try {
-        const fullSummaryResult = await t5Service.summarize(fullTranscript.trim());
-        setTranscriptSummary(fullSummaryResult.summary);
-      } catch (error) {
-        console.error('Failed to summarize full transcript:', error);
-      }
-    }
+
     
     // Send segment to backend for processing
     if (socket) {
@@ -80,7 +93,9 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
         text: bufferedText.trim(),
         summary: newSegment.summary,
         timestamp: new Date(),
-        sessionId
+        sessionId,
+        confidence: newSegment.confidence,
+        modelUsed: newSegment.modelUsed
       });
     }
   };
@@ -161,7 +176,7 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
           updatedPending.split(/[.!?]+/).filter(s => s.trim().length > 0).length >= 2; // At least 2 sentences
         
         if (shouldProcess) {
-          await processBufferedText(updatedPending.trim(), updatedTranscript.trim());
+          await processBufferedText(updatedPending.trim());
         }
         
         setCurrentSegment('');
@@ -180,8 +195,7 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
         if (pendingText.trim() && Date.now() - lastProcessTime > 3000) {
           // Process any remaining buffered text after 3 seconds of silence
           const currentPending = pendingText;
-          const currentTranscript = transcript;
-          await processBufferedText(currentPending.trim(), currentTranscript.trim() + ' ' + currentPending.trim());
+          await processBufferedText(currentPending.trim());
         }
       }, 3500);
     };
@@ -215,7 +229,6 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
 
   const clearTranscript = () => {
     setTranscript('');
-    setTranscriptSummary('');
     setSegments([]);
     setCurrentSegment('');
     setPendingText('');
@@ -225,13 +238,24 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
     }
   };
 
+  const endSession = () => {
+    if (socket && sessionId) {
+      socket.emit('speech-session-end', {
+        sessionId,
+        timestamp: new Date()
+      });
+    }
+  };
+
   const startNewSession = () => {
     clearTranscript();
-    setSessionId(Date.now().toString());
+    const newSessionId = Date.now().toString();
+    setSessionId(newSessionId);
     if (socket) {
       socket.emit('speech-session-start', {
         teacherId,
         teacherName,
+        sessionId: newSessionId,
         timestamp: new Date()
       });
     }
@@ -282,10 +306,13 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
               New Session
             </button>
             <button
-              onClick={clearTranscript}
+              onClick={() => {
+                endSession();
+                clearTranscript();
+              }}
               className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
             >
-              Clear
+              End Session
             </button>
           </div>
         </div>
@@ -321,31 +348,7 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Session Summary
-            <span className="text-xs text-gray-500 ml-2">(AI-Generated from Full Transcript)</span>
-          </label>
-          <div className="bg-blue-50 p-3 rounded border max-h-[200px] overflow-y-auto">
-            {transcriptSummary ? (
-              <p className="text-blue-800 font-medium">{transcriptSummary}</p>
-            ) : transcript ? (
-              <p className="text-gray-600 italic">Generating summary...</p>
-            ) : (
-              <p className="text-gray-400 italic">No content to summarize yet</p>
-            )}
-          </div>
-          {transcript && (
-            <details className="mt-2">
-              <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
-                View Full Transcript ({transcript.trim().split(' ').filter(w => w.length > 0).length} words)
-              </summary>
-              <div className="bg-gray-50 p-2 rounded border mt-1 max-h-[150px] overflow-y-auto">
-                <p className="text-gray-700 text-sm whitespace-pre-wrap">{transcript.trim()}</p>
-              </div>
-            </details>
-          )}
-        </div>
+
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -359,7 +362,7 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
                   <div key={index} className="text-sm border-l-4 border-blue-400 pl-3 pb-2">
                     <details>
                       <summary className="font-medium text-gray-800 cursor-pointer hover:text-blue-600">
-                        {segment.summary ? `${segment.summary.substring(0, 80)}...` : 'Processing...'}
+                        {segment.summary ? smartTruncate(segment.summary, 80) : 'Processing...'}
                       </summary>
                       <div className="mt-2 p-2 bg-white rounded text-xs">
                         <p className="text-gray-700 mb-2">{segment.text}</p>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
-import GradioSummarizationService from '../../services/GradioSummarizationService';
+import T5SummarizationService from '../../services/T5SummarizationService';
 
 interface SpeechRecognitionProps {
   socket: any;
@@ -24,25 +24,95 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
   const [segments, setSegments] = useState<SpeechSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [summarizationStatus, setSummarizationStatus] = useState<string>('Initializing...');
+  const [pendingText, setPendingText] = useState<string>('');
+  const [lastProcessTime, setLastProcessTime] = useState<number>(0);
+  const [sessionId, setSessionId] = useState<string>(Date.now().toString());
   
   const recognitionRef = useRef<any>(null);
-  const segmentTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const gradioService = GradioSummarizationService.getInstance();
+
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const t5Service = T5SummarizationService.getInstance();
+
+  // Smart truncation that preserves complete words and sentences
+  const smartTruncate = (text: string, maxLength: number = 80) => {
+    if (!text || text.length <= maxLength) return text;
+    
+    // First try to find a complete sentence within the limit
+    const sentences = text.match(/[^.!?]+[.!?]+/g);
+    if (sentences && sentences[0] && sentences[0].length <= maxLength) {
+      return sentences[0].trim();
+    }
+    
+    // If no complete sentence fits, truncate at word boundary
+    const truncated = text.substring(0, maxLength);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    
+    if (lastSpaceIndex > maxLength * 0.7) { // Only truncate at space if it's not too early
+      return truncated.substring(0, lastSpaceIndex).trim() + '...';
+    }
+    
+    // If we can't find a good word boundary, just truncate and add ellipsis
+    return truncated.trim() + '...';
+  };
+
+  // Process buffered text into a meaningful segment
+  const processBufferedText = async (bufferedText: string) => {
+    if (!bufferedText.trim()) return;
+    
+    // Clear any existing timeout
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+    }
+    
+    const newSegment: SpeechSegment = {
+      text: bufferedText.trim(),
+      timestamp: new Date(),
+      confidence: 0.9
+    };
+
+    // Generate summary using T5 service
+    try {
+      const summaryResult = await t5Service.summarize(bufferedText.trim());
+      newSegment.summary = summaryResult.summary;
+      newSegment.modelUsed = summaryResult.modelUsed;
+      newSegment.confidence = summaryResult.confidence;
+    } catch (error) {
+      console.error('T5 summarization failed:', error);
+    }
+
+    setSegments(prev => [...prev, newSegment]);
+    setPendingText(''); // Clear the buffer
+
+    
+    // Send segment to backend for processing
+    if (socket) {
+      socket.emit('speech-segment', {
+        teacherId,
+        teacherName,
+        text: bufferedText.trim(),
+        summary: newSegment.summary,
+        timestamp: new Date(),
+        sessionId,
+        confidence: newSegment.confidence,
+        modelUsed: newSegment.modelUsed
+      });
+    }
+  };
 
   useEffect(() => {
-    // Initialize Gradio service
-    const initGradioService = async () => {
+    // Initialize T5 service
+    const initT5Service = async () => {
       try {
-        setSummarizationStatus('Initializing Gradio service...');
-        await gradioService.initialize();
-        setSummarizationStatus('Gradio service ready');
+        setSummarizationStatus('Initializing T5 service...');
+        await t5Service.initialize();
+        setSummarizationStatus('T5 service ready');
       } catch (error) {
-        console.error('Failed to initialize Gradio service:', error);
-        setSummarizationStatus('Gradio service unavailable - using fallback');
+        console.error('Failed to initialize T5 service:', error);
+        setSummarizationStatus('T5 service unavailable - using fallback');
       }
     };
 
-    initGradioService();
+    initT5Service();
   }, []);
 
   useEffect(() => {
@@ -91,43 +161,42 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
       }
 
       if (finalTranscript) {
-        const newSegment: SpeechSegment = {
-          text: finalTranscript.trim(),
-          timestamp: new Date(),
-          confidence: 0.9 // Default confidence
-        };
-
-        // Generate summary using Gradio service
-        try {
-          const summaryResult = await gradioService.summarize(finalTranscript.trim());
-          newSegment.summary = summaryResult.summary;
-          newSegment.modelUsed = summaryResult.modelUsed;
-          newSegment.confidence = summaryResult.confidence;
-        } catch (error) {
-          console.error('Summarization failed:', error);
-          // Keep original segment without summary
-        }
-
-        setSegments(prev => [...prev, newSegment]);
-        setTranscript(prev => prev + ' ' + finalTranscript);
+        const newText = finalTranscript.trim();
+        const updatedPending = pendingText + ' ' + newText;
+        const updatedTranscript = transcript + ' ' + newText;
         
-        // Send segment to backend for processing
-        if (socket) {
-          socket.emit('speech-segment', {
-            teacherId,
-            teacherName,
-            text: finalTranscript.trim(),
-            timestamp: new Date(),
-            summary: newSegment.summary,
-            modelUsed: newSegment.modelUsed
-          });
+        setPendingText(updatedPending);
+        setTranscript(updatedTranscript);
+        setLastProcessTime(Date.now());
+        
+        // Process buffered text into segments when we have enough content or after a pause
+        const shouldProcess = 
+          updatedPending.split(' ').length >= 30 || // At least 30 words
+          updatedPending.split(/[.!?]+/).filter(s => s.trim().length > 0).length >= 2; // At least 2 sentences
+        
+        if (shouldProcess) {
+          await processBufferedText(updatedPending.trim());
         }
-
-        // Clear current segment after sending
+        
         setCurrentSegment('');
-      } else {
+      }
+
+      if (interimTranscript) {
         setCurrentSegment(interimTranscript);
       }
+      
+      // Set up auto-processing for remaining buffered text after silence
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+      
+      processingTimeoutRef.current = setTimeout(async () => {
+        if (pendingText.trim() && Date.now() - lastProcessTime > 3000) {
+          // Process any remaining buffered text after 3 seconds of silence
+          const currentPending = pendingText;
+          await processBufferedText(currentPending.trim());
+        }
+      }, 3500);
     };
 
     recognition.onerror = (event: any) => {
@@ -161,14 +230,31 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
     setTranscript('');
     setSegments([]);
     setCurrentSegment('');
+    setPendingText('');
+    setLastProcessTime(0);
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+    }
+  };
+
+  const endSession = () => {
+    if (socket && sessionId) {
+      socket.emit('speech-session-end', {
+        sessionId,
+        timestamp: new Date()
+      });
+    }
   };
 
   const startNewSession = () => {
     clearTranscript();
+    const newSessionId = Date.now().toString();
+    setSessionId(newSessionId);
     if (socket) {
       socket.emit('speech-session-start', {
         teacherId,
         teacherName,
+        sessionId: newSessionId,
         timestamp: new Date()
       });
     }
@@ -219,10 +305,13 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
               New Session
             </button>
             <button
-              onClick={clearTranscript}
+              onClick={() => {
+                endSession();
+                clearTranscript();
+              }}
               className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
             >
-              Clear
+              End Session
             </button>
           </div>
         </div>
@@ -242,64 +331,61 @@ const SpeechRecognition: React.FC<SpeechRecognitionProps> = ({ socket, teacherId
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Current Speech
+            Current Speech Buffer
+            {pendingText && (
+              <span className="text-xs text-blue-600 ml-2">
+                ({pendingText.split(' ').length} words buffered)
+              </span>
+            )}
           </label>
           <div className="bg-gray-50 p-3 rounded border min-h-[60px]">
-            {currentSegment ? (
-              <p className="text-gray-800">{currentSegment}</p>
+            {currentSegment || pendingText ? (
+              <p className="text-gray-800">{currentSegment || pendingText}</p>
             ) : (
               <p className="text-gray-400 italic">Waiting for speech...</p>
             )}
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Full Transcript
-          </label>
-          <div className="bg-gray-50 p-3 rounded border max-h-[200px] overflow-y-auto">
-            {transcript ? (
-              <p className="text-gray-800 whitespace-pre-wrap">{transcript}</p>
-            ) : (
-              <p className="text-gray-400 italic">No transcript yet</p>
-            )}
-          </div>
-        </div>
+
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Speech Segments ({segments.length})
+            Processed Speech Segments ({segments.length})
+            <span className="text-xs text-gray-500 ml-2">(Intelligent Buffering)</span>
           </label>
-          <div className="bg-gray-50 p-3 rounded border max-h-[150px] overflow-y-auto">
+          <div className="bg-gray-50 p-3 rounded border max-h-[200px] overflow-y-auto">
             {segments.length > 0 ? (
-              <div className="space-y-2">
-                {segments.slice(-5).reverse().map((segment, index) => (
-                  <div key={index} className="text-sm border-b border-gray-200 pb-2">
-                    <p className="text-gray-800 font-medium">{segment.text}</p>
-                    {segment.summary && (
-                      <p className="text-blue-600 text-xs mt-1">
-                        <strong>Summary:</strong> {segment.summary}
-                      </p>
-                    )}
-                    <div className="flex justify-between items-center mt-1">
-                      <p className="text-gray-500 text-xs">
-                        {segment.timestamp.toLocaleTimeString()}
-                      </p>
-                      {segment.modelUsed && (
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          segment.modelUsed === 'gradio' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {segment.modelUsed}
-                        </span>
-                      )}
-                    </div>
+              <div className="space-y-3">
+                {segments.slice(-3).reverse().map((segment, index) => (
+                  <div key={index} className="text-sm border-l-4 border-blue-400 pl-3 pb-2">
+                    <details>
+                      <summary className="font-medium text-gray-800 cursor-pointer hover:text-blue-600">
+                        {segment.summary ? smartTruncate(segment.summary, 80) : 'Processing...'}
+                      </summary>
+                      <div className="mt-2 p-2 bg-white rounded text-xs">
+                        <p className="text-gray-700 mb-2">{segment.text}</p>
+                        <div className="flex justify-between items-center text-gray-500">
+                          <span>{segment.timestamp.toLocaleTimeString()}</span>
+                          {segment.modelUsed && (
+                            <span className={`px-2 py-1 rounded ${
+                              segment.modelUsed === 't5-small-dialogsum' 
+                                ? 'bg-blue-100 text-blue-700' 
+                                : segment.modelUsed === 'gradio'
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {segment.modelUsed}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-400 italic">No segments yet</p>
+              <p className="text-gray-400 italic">No processed segments yet - speak longer phrases for better results</p>
             )}
           </div>
         </div>

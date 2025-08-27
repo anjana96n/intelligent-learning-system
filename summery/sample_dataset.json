@@ -1,0 +1,14 @@
+[
+  {
+    "input_text": "The quick brown fox jumps over the lazy dog. This is a sample text that demonstrates how the T5 model can be used for summarization tasks. The model processes the input text and generates a concise summary that captures the main points. This particular example is simple and straightforward, making it easy to understand the evaluation process.",
+    "reference_summary": "A sample text demonstrating T5 model summarization capabilities with a simple fox example."
+  },
+  {
+    "input_text": "Artificial Intelligence has revolutionized many industries in recent years. Machine learning algorithms are being deployed in healthcare, finance, transportation, and many other sectors. Deep learning models, particularly transformers like T5, have shown remarkable performance in natural language processing tasks including text summarization, translation, and question answering.",
+    "reference_summary": "Artificial Intelligence has revolutionized many industries in recent years."
+  },
+  {
+    "input_text": "Climate change is one of the most pressing issues facing humanity today. Rising global temperatures, melting ice caps, and extreme weather events are clear indicators of environmental degradation. Governments and organizations worldwide are implementing various strategies to reduce carbon emissions and transition to renewable energy sources. Individual actions also play a crucial role in addressing this global challenge.",
+    "reference_summary": "Climate change poses major challenges, requiring global efforts to reduce emissions and adopt renewable energy."
+  }
+]

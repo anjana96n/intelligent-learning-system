@@ -3,9 +3,11 @@ import natural from 'natural';
 import SpeechSession from '../models/SpeechSession.js';
 import { authenticateToken } from '../middleware/auth.js';
 import GradioSummarizationService from '../services/GradioSummarizationService.js';
+import T5SummarizationService from '../services/T5SummarizationService.js';
 
 const router = express.Router();
 const gradioService = new GradioSummarizationService();
+const t5Service = new T5SummarizationService();
 
 // Educational keywords that indicate important content
 const EDUCATIONAL_KEYWORDS = [
@@ -159,22 +161,32 @@ router.post('/segment/process', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Use Gradio service for summarization
+    // Use T5 service for summarization (with Gradio fallback)
     let summary;
     let confidence = 0.9;
-    let modelUsed = 'gradio';
+    let modelUsed = 't5-small-dialogsum';
 
     try {
-      const summaryResult = await gradioService.summarize(text);
+      // Try T5 service first
+      const summaryResult = await t5Service.summarize(text);
       summary = summaryResult.summary;
       confidence = summaryResult.confidence;
       modelUsed = summaryResult.modelUsed;
     } catch (error) {
-      console.error('Gradio summarization failed, using fallback:', error);
-      // Fallback to local summarization
-      summary = enhancedSummary(text);
-      confidence = 0.6;
-      modelUsed = 'fallback';
+      console.error('T5 summarization failed, trying Gradio fallback:', error);
+      try {
+        // Fallback to Gradio service
+        const summaryResult = await gradioService.summarize(text);
+        summary = summaryResult.summary;
+        confidence = summaryResult.confidence;
+        modelUsed = summaryResult.modelUsed;
+      } catch (gradioError) {
+        console.error('Gradio summarization also failed, using local fallback:', gradioError);
+        // Final fallback to local summarization
+        summary = enhancedSummary(text);
+        confidence = 0.6;
+        modelUsed = 'fallback';
+      }
     }
 
     // Find or create session
@@ -307,6 +319,35 @@ router.get('/session/:sessionId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching session:', error);
     res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
+
+// Direct T5 summarization endpoint
+router.post('/summarize/t5', authenticateToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    // Use T5 service for summarization
+    const summaryResult = await t5Service.summarize(text.trim());
+
+    res.json({
+      success: true,
+      summary: summaryResult.summary,
+      confidence: summaryResult.confidence,
+      type: summaryResult.type,
+      modelUsed: summaryResult.modelUsed
+    });
+
+  } catch (error) {
+    console.error('T5 summarization endpoint error:', error);
+    res.status(500).json({ 
+      error: 'Summarization failed',
+      message: error.message
+    });
   }
 });
 

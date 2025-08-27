@@ -4,6 +4,7 @@ import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
 import TeacherDashboard from './pages/TeacherDashboard';
 import StudentDashboard from './pages/StudentDashboard';
+import SpeechTestingPage from './pages/SpeechTestingPage';
 
 // Protected Route component
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
@@ -39,6 +40,14 @@ const AppRoutes = () => {
               <StudentDashboard />
             </ProtectedRoute>
           )
+        }
+      />
+      <Route
+        path="/speech-testing"
+        element={
+          <ProtectedRoute allowedRoles={['teacher']}>
+            <SpeechTestingPage />
+          </ProtectedRoute>
         }
       />
       <Route path="/" element={<Navigate to="/dashboard" />} />

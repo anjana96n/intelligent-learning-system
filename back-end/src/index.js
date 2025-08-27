@@ -482,8 +482,8 @@ io.on('connection', (socket) => {
   // Handle speech segment
   socket.on('speech-segment', async (data) => {
     try {
-      // Use enhanced summary
-      const summary = enhancedSummary(data.text);
+      // Use the AI-generated summary from the teacher, fallback to enhanced summary if not provided
+      const summary = data.summary || enhancedSummary(data.text);
 
       // Find or create session
       let session = await SpeechSession.findOne({ sessionId: data.sessionId });
@@ -501,9 +501,10 @@ io.on('connection', (socket) => {
         text: data.text.trim(),
         summary,
         timestamp: data.timestamp || new Date(),
-        confidence: 0.9
+        confidence: data.confidence || 0.9
       });
       await session.save();
+      
       const summaryObj = {
         id: session.segments[session.segments.length - 1]._id,
         teacherId: data.teacherId,
@@ -511,8 +512,12 @@ io.on('connection', (socket) => {
         summary,
         originalText: data.text.trim(),
         timestamp: data.timestamp || new Date(),
-        sessionId: session.sessionId
+        sessionId: session.sessionId,
+        confidence: data.confidence || 0.9,
+        modelUsed: data.modelUsed || 'fallback'
       };
+      
+      console.log('Broadcasting speech summary to students:', summaryObj);
       io.emit('speech-summary', summaryObj);
     } catch (error) {
       console.error('Error handling speech segment:', error);

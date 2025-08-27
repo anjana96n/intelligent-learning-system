@@ -446,8 +446,22 @@ const StudentDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Speech Summary */}
-        <div className="mb-8">
+        {/* Live Lecture Summaries Section */}
+        <div className="bg-white shadow rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <h2 className="text-lg font-semibold">Live Lecture Summaries</h2>
+              <span className="text-xs text-gray-500">(AI-Generated from Speech)</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs bg-gradient-to-r from-blue-500 to-purple-600 text-white px-2 py-1 rounded">
+                LIVE
+              </span>
+              <span className="text-sm text-gray-500">
+                Intelligent Buffering
+              </span>
+            </div>
+          </div>
           <SpeechSummary socket={socket} />
         </div>
       </div>

@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import MainLayout from '../layouts/MainLayout';
 import CreatePoll from '../components/teacher/CreatePoll';
 import CreateQuiz from '../components/teacher/CreateQuiz';
 import SpeechRecognition from '../components/teacher/SpeechRecognition';
 import StatisticsDashboard from '../components/teacher/StatisticsDashboard';
-import { Brain, GraduationCap, Users, BarChart3, Plus, Eye } from 'lucide-react';
+import { Brain, GraduationCap, Users, BarChart3, Plus, Eye, TestTube2, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 
 interface Student {
@@ -255,53 +257,8 @@ const TeacherDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-        <div className="absolute inset-0 bg-black/10"></div>
-        
-        {/* Floating Elements */}
-        <div className="absolute top-20 left-10 w-20 h-20 bg-white/5 rounded-full blur-xl animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-32 h-32 bg-purple-400/10 rounded-full blur-xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-20 left-1/4 w-24 h-24 bg-pink-400/10 rounded-full blur-xl animate-pulse delay-2000"></div>
-        <div className="absolute bottom-40 right-1/3 w-16 h-16 bg-indigo-400/10 rounded-full blur-xl animate-pulse delay-3000"></div>
-        
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}></div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Navigation Bar */}
-        <nav className="backdrop-blur-xl bg-white/10 border-b border-white/20 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex items-center">
-                <div className="relative">
-                  <Brain className="h-8 w-8 text-white" />
-                  <GraduationCap className="h-6 w-6 text-purple-300 absolute -top-1 -right-1" />
-                </div>
-                <h1 className="ml-2 text-xl font-semibold text-white">Teacher Dashboard</h1>
-              </div>
-              <div className="flex items-center space-x-4">
-                <span className="text-purple-100">Welcome, {user?.name}</span>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500/20 border border-red-400/50 text-red-200 px-4 py-2 rounded-lg hover:bg-red-500/30 transition-all duration-200"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        {/* Main Content */}
-        <div className="flex-1 max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <MainLayout>
+      <div className="max-w-7xl mx-auto">
           {/* Welcome Header */}
           <div className="backdrop-blur-xl bg-white/10 rounded-2xl border border-white/20 shadow-2xl p-6 mb-6">
             <h1 className="text-3xl font-bold text-white mb-2">Welcome to JoyStudy</h1>
@@ -329,6 +286,13 @@ const TeacherDashboard: React.FC = () => {
                 <Brain className="h-5 w-5 mr-2" />
                 Create Quiz
               </button>
+              <Link
+                to="/speech-testing"
+                className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white px-6 py-3 rounded-lg hover:scale-105 transition-all duration-200 flex items-center"
+              >
+                <TestTube2 className="h-5 w-5 mr-2" />
+                Speech Testing
+              </Link>
               <button
                 onClick={() => setShowStatistics(!showStatistics)}
                 className={`px-6 py-3 rounded-lg hover:scale-105 transition-all duration-200 flex items-center min-w-[160px] justify-center ${
@@ -545,24 +509,23 @@ const TeacherDashboard: React.FC = () => {
             </>
           )}
         </div>
-      </div>
 
-      {/* Create Poll Modal */}
-      {showCreatePoll && (
-        <CreatePoll
-          onClose={() => setShowCreatePoll(false)}
-          socket={socket}
-        />
-      )}
+        {/* Create Poll Modal */}
+        {showCreatePoll && (
+          <CreatePoll
+            onClose={() => setShowCreatePoll(false)}
+            socket={socket}
+          />
+        )}
 
-      {/* Create Quiz Modal */}
-      {showCreateQuiz && (
-        <CreateQuiz
-          onClose={() => setShowCreateQuiz(false)}
-          socket={socket}
-        />
-      )}
-    </div>
+        {/* Create Quiz Modal */}
+        {showCreateQuiz && (
+          <CreateQuiz
+            onClose={() => setShowCreateQuiz(false)}
+            socket={socket}
+          />
+        )}
+    </MainLayout>
   );
 };
 

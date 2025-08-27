@@ -1,0 +1,14 @@
+# Core dependencies for T5 summarization and ROUGE evaluation
+torch>=1.9.0
+transformers>=4.20.0
+rouge-score>=0.1.2
+sentencepiece>=0.1.96
+
+# Optional: for better performance
+accelerate>=0.20.0
+
+# For JSON handling and file operations (usually included in Python)
+# json (built-in)
+# argparse (built-in)
+# statistics (built-in)
+# typing (built-in)
